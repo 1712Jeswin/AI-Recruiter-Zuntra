@@ -2,12 +2,14 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { feedback, interview } from "@/db/schema";
+import { feedback, interview, resumeQuestions } from "@/db/schema";
 import { randomUUID } from "crypto";
 import { VertexAI } from "@google-cloud/vertexai";
 import PDFParser from "pdf2json";
 
-// Convert PDF → Text
+// ---------------------------
+// PDF → TEXT Extractor
+// ---------------------------
 async function extractPdfText(buffer: Buffer): Promise<string> {
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser();
@@ -32,6 +34,9 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   });
 }
 
+// ---------------------------
+// MAIN POST HANDLER
+// ---------------------------
 export async function POST(req: Request) {
   try {
     const form = await req.formData();
@@ -46,7 +51,7 @@ export async function POST(req: Request) {
       file: file?.name,
     });
 
-    // Clean candidateId
+    // Clean & validate candidateId
     const candidateId = candidateIdRaw?.trim();
     if (!candidateId || candidateId === "undefined") {
       return NextResponse.json(
@@ -69,11 +74,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Convert PDF to text
+    // ---------------------------
+    // Extract resume text
+    // ---------------------------
     const buffer = Buffer.from(await file.arrayBuffer());
     const resumeText = await extractPdfText(buffer);
 
-    // Fetch interview/job info
+    // ---------------------------
+    // Fetch interview/job data
+    // ---------------------------
     const job = await db.query.interview.findFirst({
       where: (i, { eq }) => eq(i.id, interviewId),
     });
@@ -85,7 +94,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // Gemini prompt
+    // ---------------------------
+    // Gemini Resume Evaluation Prompt
+    // ---------------------------
     const prompt = `
 Return ONLY valid JSON. No markdown.
 
@@ -105,7 +116,6 @@ Candidate Resume:
 ${resumeText}
 `;
 
-    // Gemini model
     const vertex = new VertexAI({
       project: process.env.GCP_PROJECT_ID!,
       location: "us-central1",
@@ -144,7 +154,57 @@ ${resumeText}
       );
     }
 
-    // Convert float → int (x100)
+    // ---------------------------
+    // Generate 5 interview questions
+    // ---------------------------
+    const questionPrompt = `
+Generate EXACTLY 5 interview questions based ONLY on this candidate's resume.
+Return ONLY JSON array:
+
+[
+  "question1",
+  "question2",
+  "question3",
+  "question4",
+  "question5"
+]
+
+Resume:
+${resumeText}
+`;
+
+    const questionResult = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: questionPrompt }] }],
+    });
+
+    let questionRaw =
+      questionResult.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+    questionRaw = questionRaw
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    let parsedQuestions: string[] = [];
+
+    try {
+      parsedQuestions = JSON.parse(questionRaw);
+    } catch (err) {
+      console.error("Question JSON Parse Error:", questionRaw);
+      parsedQuestions = [];
+    }
+
+    // Save questions in DB
+    await db.insert(resumeQuestions).values({
+      id: randomUUID(),
+      candidateId,
+      interviewId,
+      questions: parsedQuestions,
+    });
+
+    // ---------------------------
+    // Convert score floats → percentages
+    // ---------------------------
     const toInt = (n: number) => Math.round(n * 100);
 
     const scores = {
@@ -156,7 +216,9 @@ ${resumeText}
       atsScore: toInt(json.ats.score ?? 0),
     };
 
-    // Insert feedback
+    // ---------------------------
+    // Save Feedback into DB
+    // ---------------------------
     const feedbackId = randomUUID();
 
     await db.insert(feedback).values({
@@ -166,11 +228,6 @@ ${resumeText}
       ...scores,
       fullReport: json,
     });
-
-    // 🔥 DEBUG — CONFIRM FEEDBACK TABLE CONTENTS
-    console.log("DEBUG: Listing all feedback rows...");
-    const rows = await db.query.feedback.findMany();
-    console.log("DEBUG FEEDBACK TABLE:", rows);
 
     return NextResponse.json({
       success: true,

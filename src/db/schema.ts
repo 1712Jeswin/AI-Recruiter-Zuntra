@@ -124,3 +124,19 @@ export const feedback = pgTable("feedback", {
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const resumeQuestions = pgTable("resume_questions", {
+  id: text("id").primaryKey(),
+
+  candidateId: text("candidate_id")
+    .notNull()
+    .references(() => candidate.id, { onDelete: "cascade" }),
+
+  interviewId: text("interview_id")
+    .notNull()
+    .references(() => interview.id, { onDelete: "cascade" }),
+
+  questions: jsonb("questions").notNull(), // array of 5 questions
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
