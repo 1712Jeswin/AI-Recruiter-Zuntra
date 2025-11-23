@@ -6,6 +6,7 @@ import {
   pgEnum,
   timestamp,
   jsonb,
+  unique,
 } from "drizzle-orm/pg-core";
 
 export const userRole = pgEnum("user_role", ["admin", "client"]);
@@ -88,18 +89,56 @@ export const interview = pgTable("interview", {
   userEmail: text("user_email").references(() => user.email, { onDelete: "cascade" }),
 });
 
-export const candidate = pgTable("candidate", {
-  id: text("id").primaryKey(),
-  
-  interviewId: text("interview_id")
-    .notNull()
-    .references(() => interview.id, { onDelete: "cascade" }),
+export const candidate = pgTable(
+  "candidate",
+  {
+    id: text("id").primaryKey(),
 
-  fullName: text("full_name").notNull(),
-  email: text("email").notNull(),
+    interviewId: text("interview_id")
+      .notNull()
+      .references(() => interview.id, { onDelete: "cascade" }),
 
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+    fullName: text("full_name").notNull(),
+    email: text("email").notNull(),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    uniqueEmailPerInterview: unique().on(table.email, table.interviewId),
+  })
+);
+
+export const emailVerification = pgTable(
+  "email_verification",
+  {
+    id: text("id").primaryKey(),
+
+    // Candidate email (before candidate account is created)
+    email: text("email").notNull(),
+
+    // Interview this email verification is for
+    interviewId: text("interview_id")
+      .notNull()
+      .references(() => interview.id, { onDelete: "cascade" }),
+
+    // 6-digit OTP
+    otp: text("otp").notNull(),
+
+    // Expiry time
+    expiresAt: timestamp("expires_at").notNull(),
+
+    // True after user verifies OTP
+    verified: boolean("verified").notNull().default(false),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    // Ensures one verification per (email + interview)
+    // Supports multi-user safely
+    emailInterviewUnique: unique().on(table.email, table.interviewId),
+  })
+);
+
 
 export const feedback = pgTable("feedback", {
   id: text("id").primaryKey(),
