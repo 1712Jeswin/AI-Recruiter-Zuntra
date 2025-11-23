@@ -18,7 +18,6 @@ export default function ResumePage() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Load interview details
   useEffect(() => {
     if (!interview_id) return;
 
@@ -37,8 +36,8 @@ export default function ResumePage() {
 
   if (!data)
     return (
-      <div className="min-h-screen flex justify-center items-center p-6">
-        <Card className="w-full max-w-2xl p-6">
+      <div className="min-h-screen flex justify-center items-center p-6 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <Card className="w-full max-w-2xl p-8 rounded-2xl shadow-2xl bg-white/90 backdrop-blur">
           <CardHeader>
             <Skeleton className="h-6 w-40 mb-2" />
             <Skeleton className="h-4 w-20" />
@@ -54,105 +53,112 @@ export default function ResumePage() {
     );
 
   async function submitResume() {
-  if (!file) {
-    return alert("Upload a resume first.");
-  }
+    if (!file) {
+      return alert("Upload a resume first.");
+    }
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    // 1) Create candidate (only if you don't already have one)
-    // If you already have candidateId in state, skip this and use it.
-    // Example: if (data.candidateId) candidateId = data.candidateId;
-    const createRes = await fetch("/api/candidate/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fullName: data.fullName ?? "Unknown Candidate",
-        email: data.userEmail ?? "unknown@example.com",
-        interviewId: data.id,
-      }),
-    });
+    try {
+      const createRes = await fetch("/api/candidate/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: data.fullName ?? "Unknown Candidate",
+          email: data.userEmail ?? "unknown@example.com",
+          interviewId: data.id,
+        }),
+      });
 
-    if (!createRes.ok) {
-      const err = await createRes.json().catch(() => ({}));
-      console.error("Create candidate failed:", err);
+      if (!createRes.ok) {
+        const err = await createRes.json().catch(() => ({}));
+        console.error("Create candidate failed:", err);
+        setLoading(false);
+        alert("Failed to create candidate. Check console for details.");
+        return;
+      }
+
+      const createJson = await createRes.json();
+      const candidateId = createJson?.candidateId;
+
+      if (!candidateId || candidateId === "undefined") {
+        console.error("Invalid candidateId returned:", createJson);
+        setLoading(false);
+        alert("Server returned invalid candidate id. Check console.");
+        return;
+      }
+
+      const form = new FormData();
+      form.append("resume", file);
+      form.append("interviewId", data.id);
+      form.append("candidateId", candidateId);
+
+      const res = await fetch("/api/resume", {
+        method: "POST",
+        body: form,
+      });
+
       setLoading(false);
-      alert("Failed to create candidate. Check console for details.");
-      return;
-    }
 
-    const createJson = await createRes.json();
-    const candidateId = createJson?.candidateId;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("Resume analysis failed:", err);
+        alert("Analysis failed — check console for details.");
+        return;
+      }
 
-    // Validate candidateId is present and not the string "undefined"
-    if (!candidateId || candidateId === "undefined") {
-      console.error("Invalid candidateId returned:", createJson);
+      const js = await res.json();
+      router.push(`/interview/${data.id}/feedback/${js.feedbackId}`);
+    } catch (err) {
+      console.error("submitResume error:", err);
       setLoading(false);
-      alert("Server returned invalid candidate id. Check console.");
-      return;
+      alert("Unexpected error — check console.");
     }
-
-    // 2) Now upload resume with a proper candidateId
-    const form = new FormData();
-    form.append("resume", file);
-    form.append("interviewId", data.id);
-    form.append("candidateId", candidateId);
-
-    const res = await fetch("/api/resume", {
-      method: "POST",
-      body: form,
-    });
-
-    setLoading(false);
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error("Resume analysis failed:", err);
-      alert("Analysis failed — check console for details.");
-      return;
-    }
-
-    const js = await res.json();
-    router.push(`/interview/${data.id}/feedback/${js.feedbackId}`);
-  } catch (err) {
-    console.error("submitResume error:", err);
-    setLoading(false);
-    alert("Unexpected error — check console.");
   }
-}
-
-
 
   return (
-    <div className="min-h-screen bg-gray-100 flex justify-center items-center p-6">
-      <Card className="w-full max-w-2xl shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold text-center">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex justify-center items-center p-6">
+      <Card className="w-full max-w-2xl rounded-2xl shadow-2xl bg-white/95 backdrop-blur-lg border border-white/20">
+        <CardHeader className="pb-4 border-b">
+          <CardTitle className="text-2xl font-bold text-center bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             Resume Analysis
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="space-y-6">
-          <div>
-            <Label>Job Title</Label>
-            <Input disabled value={data.jobPosition} className="cursor-not-allowed bg-gray-100" />
+        <CardContent className="space-y-6 p-6 md:p-8">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Job Title</Label>
+            <Input
+              disabled
+              value={data.jobPosition}
+              className="cursor-not-allowed bg-gray-100 border border-gray-200 rounded-xl shadow-sm"
+            />
           </div>
 
-          <div>
-            <Label>Job Description</Label>
-            <Textarea disabled rows={5} value={data.jobDescription} className="cursor-not-allowed bg-gray-100" />
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Job Description</Label>
+            <Textarea
+              disabled
+              rows={5}
+              value={data.jobDescription}
+              className="cursor-not-allowed bg-gray-100 border border-gray-200 rounded-xl shadow-sm resize-none"
+            />
           </div>
 
-          {/* Upload Section */}
-          <div>
-            <Label>Upload Resume</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Upload Resume</Label>
 
-            <div className="relative border border-dashed rounded-lg p-6 bg-gray-50 hover:bg-gray-100 flex flex-col items-center gap-2 text-center cursor-pointer">
-              <UploadCloud className="w-6 h-6 text-gray-600" />
-              <p className="text-gray-700 text-sm">
-                {file ? file.name : "Click to upload PDF or DOCX"}
-              </p>
+            <div className="relative border-2 border-dashed border-blue-300 rounded-2xl p-8 bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 transition-all duration-300 flex flex-col items-center gap-3 text-center cursor-pointer shadow-inner">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <UploadCloud className="w-6 h-6 text-blue-600" />
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-gray-800 text-sm font-medium">
+                  {file ? file.name : "Click to upload your resume"}
+                </p>
+                <p className="text-xs text-gray-500">PDF or DOCX formats supported</p>
+              </div>
 
               <Input
                 type="file"
@@ -164,7 +170,7 @@ export default function ResumePage() {
           </div>
 
           <Button
-            className="w-full bg-blue-600 text-white hover:bg-blue-700"
+            className="w-full h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
             disabled={loading}
             onClick={submitResume}
           >

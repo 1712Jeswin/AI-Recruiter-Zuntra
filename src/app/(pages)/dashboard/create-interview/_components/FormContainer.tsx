@@ -337,7 +337,7 @@ const FormContainer = ({
       {/* Submit Button */}
       <div className="mt-7 flex justify-end">
         <Button
-          className="flex gap-2 items-center"
+          className="flex gap-2 items-center bg-blue-500"
           onClick={handleSubmit}
           disabled={!isFormValid}
         >
