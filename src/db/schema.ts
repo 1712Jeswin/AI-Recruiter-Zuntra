@@ -124,7 +124,7 @@ export const emailVerification = pgTable(
     candidateId: text("candidate_id")
     .references(() => candidate.id, { onDelete: "cascade" }),
 
-    // 6-digit OTP
+    // 6-digit OTP 
     otp: text("otp").notNull(),
 
     // Expiry time
