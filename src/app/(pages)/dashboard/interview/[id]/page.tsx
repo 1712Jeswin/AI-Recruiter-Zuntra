@@ -3,6 +3,8 @@ import React from "react";
 import { getInterviewDetails } from "./actions";
 import { Card } from "@/components/ui/card";
 import InterviewLeaderboardClient from "../../_components/InterviewLeaderboard.client";
+import CheatMonitorWrapper from "./_components/CheatMonitorWrapper";
+
 
 
 /**
@@ -70,8 +72,14 @@ export default async function InterviewDetails({ params }: PageProps) {
     userEmail: interview.userEmail ?? null,
   };
 
+
+
   return (
     <div className="p-7">
+        {/* 🔥 CHEATING DETECTION RUNS HERE */}
+      <div className="mb-8">
+         <CheatMonitorWrapper />
+      </div>
       <h1 className="text-2xl font-semibold mb-4">
         {safeInterview.jobPosition} – Candidate Leaderboard
       </h1>
