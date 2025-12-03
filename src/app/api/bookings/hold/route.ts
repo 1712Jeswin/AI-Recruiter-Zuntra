@@ -2,112 +2,108 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { booking, bookingHold, candidate } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { slotOverlaps } from "@/services/booking";
-import { v4 as uuidv4 } from "uuid";
+import { interviewSlot, booking, bookingHold, candidate } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
+import { v4 as uuid } from "uuid";
 
-const HOLD_TTL_SECONDS = Number(process.env.SLOT_HOLD_TTL_SECONDS ?? 300);
-const CAPACITY = Number(process.env.SLOT_CAPACITY ?? 15);
+const HOLD_TTL = 300; // 5 minutes
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { interviewId, candidateId, start, end } = body;
+    const { interviewId, candidateId, slotRecordId, slotIndex } = body;
 
-    if (!interviewId || !candidateId || !start || !end) {
+    if (!interviewId || !candidateId || slotRecordId == null || slotIndex == null) {
       return NextResponse.json({ error: "missing_fields" }, { status: 400 });
     }
 
     // Validate candidate
-    const cand = await db
-      .select()
-      .from(candidate)
-      .where(eq(candidate.id, candidateId))
-      .then((r) => r[0]);
+    const cand = await db.select().from(candidate).where(eq(candidate.id, candidateId));
 
-    if (!cand)
+    if (!cand.length)
       return NextResponse.json({ error: "candidate_not_found" }, { status: 404 });
 
-    if (cand.interviewId !== interviewId)
-      return NextResponse.json(
-        { error: "candidate_not_in_interview" },
-        { status: 403 }
-      );
+    if (cand[0].interviewId !== interviewId)
+      return NextResponse.json({ error: "invalid_candidate" }, { status: 403 });
 
-    // 3️⃣ Prevent duplicate confirmed bookings
-    const existingConfirmed = await db
+    // Prevent creating hold if already booked
+    const existingBooking = await db
       .select()
       .from(booking)
-      .where(eq(booking.candidateId, candidateId))
-      .then((rows) =>
-        rows.find(
-          (b) => b.interviewId === interviewId && b.status === "confirmed"
-        )
-      );
+      .where(and(eq(booking.interviewId, interviewId), eq(booking.candidateId, candidateId)));
 
-    if (existingConfirmed) {
-      return NextResponse.json(
-        { error: "already_booked" },
-        { status: 409 }
-      );
+    if (existingBooking.length > 0)
+      return NextResponse.json({ error: "already_booked" }, { status: 409 });
+
+    // Get slot record
+    const slotRows = await db.select().from(interviewSlot).where(eq(interviewSlot.id, slotRecordId));
+
+    if (!slotRows.length)
+      return NextResponse.json({ error: "slot_record_not_found" }, { status: 404 });
+
+    const slotRecord = slotRows[0];
+    const slots = slotRecord.slots || [];
+
+    if (slotIndex < 0 || slotIndex >= slots.length) {
+      return NextResponse.json({ error: "invalid_slot_index" }, { status: 400 });
     }
 
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-
-    if (endDate <= startDate)
-      return NextResponse.json({ error: "invalid_slot" }, { status: 400 });
+    const selectedSlot = slots[slotIndex];
+    const { start, end, capacity } = selectedSlot;
 
     const now = new Date();
 
-    // Get bookings
-    const overlappingBookings = await db
+    // Confirmed bookings
+    const confirmed = await db
       .select()
       .from(booking)
-      .where(eq(booking.interviewId, interviewId));
+      .where(
+        and(
+          eq(booking.interviewId, interviewId),
+          eq(booking.slotId, slotRecordId),
+          eq(booking.slotIndex, slotIndex)
+        )
+      );
 
-    // Get holds
-    const overlappingHolds = await db
+    // FIX: Correct table for holds
+    const holds = await db
       .select()
       .from(bookingHold)
-      .where(eq(bookingHold.interviewId, interviewId));
+      .where(
+        and(
+          eq(bookingHold.interviewId, interviewId),
+          eq(bookingHold.slotId, slotRecordId),
+          eq(bookingHold.slotIndex, slotIndex)
+        )
+      );
 
-    const bookingsCount = overlappingBookings.filter((b) =>
-      slotOverlaps(startDate, endDate, new Date(b.start), new Date(b.end))
-    ).length;
+    const activeHolds = holds.filter((h) => new Date(h.expiresAt) > now).length;
+    const confirmedCount = confirmed.length;
 
-    const holdsCount = overlappingHolds.filter(
-      (h) =>
-        new Date(h.expiresAt) > now &&
-        slotOverlaps(startDate, endDate, new Date(h.start), new Date(h.end))
-    ).length;
-
-    const used = bookingsCount + holdsCount;
-
-    if (used >= CAPACITY) {
+    if (confirmedCount + activeHolds >= capacity) {
       return NextResponse.json({ error: "slot_full" }, { status: 409 });
     }
 
-    // Create HOLD record
-    const holdId = uuidv4();
-    const expiresAt = new Date(Date.now() + HOLD_TTL_SECONDS * 1000);
+    // Create HOLD
+    const holdId = uuid();
+    const expiresAt = new Date(Date.now() + HOLD_TTL * 1000);
 
     await db.insert(bookingHold).values({
       id: holdId,
-      candidateId,
       interviewId,
-      recruiterId: null,
-      start: startDate,
-      end: endDate,
+      candidateId,
+      slotId: slotRecordId,
+      slotIndex,
       expiresAt,
-      createdAt: new Date(),
     });
 
     return NextResponse.json({
-      success: true,
       holdId,
+      slotRecordId,
+      slotIndex,
       expiresAt: expiresAt.toISOString(),
+      start,
+      end,
     });
   } catch (err) {
     console.error("HOLD ERROR:", err);

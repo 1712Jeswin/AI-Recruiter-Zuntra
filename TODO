@@ -1,0 +1,2 @@
+1. If we cancel the slot booking still the slot is considered as book and its not released
+2. Make booking and client side routes protected 

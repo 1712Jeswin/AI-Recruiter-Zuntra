@@ -1,11 +1,10 @@
+// app/api/bookings/confirm/route.ts
+
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { booking, bookingHold } from "@/db/schema";
+import { booking, bookingHold, interviewSlot } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
-import { slotOverlaps } from "@/services/booking";
-
-const CAPACITY = Number(process.env.SLOT_CAPACITY ?? 15);
+import { v4 as uuid } from "uuid";
 
 export async function POST(req: Request) {
   try {
@@ -16,82 +15,76 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "missing_fields" }, { status: 400 });
     }
 
-    // STEP 1 — Load the hold
-    const hold = await db
-      .select()
-      .from(bookingHold)
-      .where(eq(bookingHold.id, holdId))
-      .then((r) => r[0]);
+    // --------------------------------------------------
+    // Load hold
+    // --------------------------------------------------
+    const hold = (
+      await db.select().from(bookingHold).where(eq(bookingHold.id, holdId))
+    )[0];
 
-    if (!hold) {
+    if (!hold)
       return NextResponse.json({ error: "hold_not_found" }, { status: 404 });
-    }
 
-    if (hold.expiresAt < new Date()) {
+    if (hold.candidateId !== candidateId)
+      return NextResponse.json({ error: "not_owner" }, { status: 403 });
+
+    if (new Date(hold.expiresAt) < new Date())
       return NextResponse.json({ error: "hold_expired" }, { status: 410 });
+
+
+    // --------------------------------------------------
+    // Load slotRecord to extract start/end from JSON array
+    // --------------------------------------------------
+    const slotRecord = (
+      await db
+        .select()
+        .from(interviewSlot)
+        .where(eq(interviewSlot.id, hold.slotId))
+    )[0];
+
+    if (!slotRecord)
+      return NextResponse.json({ error: "slot_record_not_found" }, { status: 404 });
+
+    const slots = slotRecord.slots || [];
+
+    if (
+      hold.slotIndex < 0 ||
+      hold.slotIndex >= slots.length
+    ) {
+      return NextResponse.json({ error: "invalid_slot_index" }, { status: 400 });
     }
 
-    if (hold.candidateId !== candidateId) {
-      return NextResponse.json({ error: "not_hold_owner" }, { status: 403 });
-    }
+    const selectedSlot = slots[hold.slotIndex];
+    const { start, end } = selectedSlot;
 
-    // STEP 2 — Check slot capacity AGAIN
-    const allBookings = await db
-      .select()
-      .from(booking)
-      .where(eq(booking.interviewId, hold.interviewId));
-
-    const allHolds = await db
-      .select()
-      .from(bookingHold)
-      .where(eq(bookingHold.interviewId, hold.interviewId));
-
-    const used =
-      allBookings.filter((b) =>
-        slotOverlaps(
-          hold.start,
-          hold.end,
-          new Date(b.start),
-          new Date(b.end)
-        )
-      ).length +
-      allHolds.filter(
-        (h) =>
-          h.id !== holdId &&
-          h.expiresAt > new Date() &&
-          slotOverlaps(
-            hold.start,
-            hold.end,
-            new Date(h.start),
-            new Date(h.end)
-          )
-      ).length;
-
-    if (used >= CAPACITY) {
-      return NextResponse.json({ error: "slot_full" }, { status: 409 });
-    }
-
-    // STEP 3 — Insert final booking
-    const bookingId = uuidv4();
+    // --------------------------------------------------
+    // Complete booking
+    // --------------------------------------------------
+    const bookingId = uuid();
 
     await db.insert(booking).values({
       id: bookingId,
       interviewId: hold.interviewId,
-      candidateId: hold.candidateId,
-      recruiterId: hold.recruiterId ?? null,
-      start: hold.start,
-      end: hold.end,
+      candidateId,
+      slotId: hold.slotId,
+      slotIndex: hold.slotIndex,
+      start,
+      end,
       status: "confirmed",
-      providerEventId: null,
-      provider: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     });
 
-    // STEP 4 — Remove hold (make sure it does not block slots anymore)
+    // --------------------------------------------------
+    // Remove hold
+    // --------------------------------------------------
     await db.delete(bookingHold).where(eq(bookingHold.id, holdId));
 
-    return NextResponse.json({ success: true, bookingId });
+    return NextResponse.json({
+      bookingId,
+      slotId: hold.slotId,
+      slotIndex: hold.slotIndex,
+      start: new Date(start).toISOString(),
+      end: new Date(end).toISOString(),
+    });
   } catch (err) {
     console.error("CONFIRM ERROR:", err);
     return NextResponse.json({ error: "server_error" }, { status: 500 });

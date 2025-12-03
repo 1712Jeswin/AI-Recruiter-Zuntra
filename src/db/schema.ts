@@ -187,98 +187,97 @@ export const resumeQuestions = pgTable("resume_questions", {
 });
 
 
-// export const recruiterAvailability = pgTable("recruiter_availability", {
-//   id: text("id").primaryKey(),
+// ! Slot Bookibg Table
 
-//   userId: text("user_id")
-//     .notNull()
-//     .references(() => user.id, { onDelete: "cascade" }),
-
-//   // Availability window in UTC
-//   startTime: timestamp("start_time").notNull(),
-//   endTime: timestamp("end_time").notNull(),
-
-//   // For weekly recurring availability: e.g. "RRULE:FREQ=WEEKLY;BYDAY=MO,WE"
-//   recurring: text("recurring"),      
-
-//   // Optional job-specific slot (if needed)
-//   interviewId: text("interview_id").references(() => interview.id, {
-//     onDelete: "set null",
-//   }),
-
-//   createdAt: timestamp("created_at").notNull().defaultNow(),
-// });
-
-export const calendarConnection = pgTable("calendar_connection", {
-  id: text("id").primaryKey(),
-
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-
-  provider: text("provider").notNull(), // "google" | "microsoft" | "ics"
-
-  accessToken: text("access_token"),
-  refreshToken: text("refresh_token"),
-  accessTokenExpiresAt: timestamp("access_token_expires_at"),
-  refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
-
-  scope: text("scope"),
-  calendarId: text("calendar_id").default("primary"),
-
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
- 
-export const booking = pgTable("booking", {
+export const interviewSlot = pgTable("interview_slot", {
   id: text("id").primaryKey(),
 
   interviewId: text("interview_id")
     .notNull()
     .references(() => interview.id, { onDelete: "cascade" }),
 
- recruiterId: text("recruiter_id")
-  .references(() => user.id, { onDelete: "set null" }),
+  // Stores all slot ranges as a JSON array
+  // [{ start, end, capacity }, ...]
+  slots: jsonb("slots").notNull(),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 
-  candidateId: text("candidate_id")
-    .notNull()
-    .references(() => candidate.id, { onDelete: "cascade" }),
+// -------------------------------------------------
+// BOOKING (Confirmed interviews)
+// -------------------------------------------------
 
-  start: timestamp("start").notNull(),
-  end: timestamp("end").notNull(),
+export const booking = pgTable("booking", {
+  id: text("id").primaryKey(),
 
-  status: text("status").notNull(),
+  interviewId: text("interview_id").notNull(),
+  candidateId: text("candidate_id").notNull(),
 
-  providerEventId: text("provider_event_id"),
-  provider: text("provider"),
+  // NEW FIELDS:
+  slotId: text("slot_id").notNull(),     // interview_slot.id
+  slotIndex: integer("slot_index").notNull(),  // index in JSON array
+
+  status: text("status").notNull(),  // confirmed | cancelled
+
+   start: text("start").notNull(),
+  end: text("end"),
+
+
+  meetingLink: text("meeting_link"),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 
+// -------------------------------------------------
+// BOOKING HOLD (5 min temporary reservation)
+// -------------------------------------------------
 
 export const bookingHold = pgTable("booking_hold", {
   id: text("id").primaryKey(),
 
-  recruiterId: text("recruiter_id")
-    .references(() => user.id, { onDelete: "set null" }),  // <-- FIXED
-
-  candidateId: text("candidate_id")
+  slotId: text("slot_id")
     .notNull()
-    .references(() => candidate.id, { onDelete: "cascade" }),
+    .references(() => interviewSlot.id, { onDelete: "cascade" }),
+
+  slotIndex: integer("slot_index").notNull(),
 
   interviewId: text("interview_id")
     .notNull()
     .references(() => interview.id, { onDelete: "cascade" }),
 
-  start: timestamp("start").notNull(),
-  end: timestamp("end").notNull(),
+  candidateId: text("candidate_id")
+    .notNull()
+    .references(() => candidate.id, { onDelete: "cascade" }),
 
   expiresAt: timestamp("expires_at").notNull(),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+
+// export const calendarConnection = pgTable("calendar_connection", {
+//   id: text("id").primaryKey(),
+
+//   userId: text("user_id")
+//     .notNull()
+//     .references(() => user.id, { onDelete: "cascade" }),
+
+//   provider: text("provider").notNull(), // "google" | "microsoft" | "ics"
+
+//   accessToken: text("access_token"),
+//   refreshToken: text("refresh_token"),
+//   accessTokenExpiresAt: timestamp("access_token_expires_at"),
+//   refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+
+//   scope: text("scope"),
+//   calendarId: text("calendar_id").default("primary"),
+
+//   createdAt: timestamp("created_at").notNull().defaultNow(),
+// });
+ 
 
 
 

@@ -12,7 +12,14 @@ import {
   XCircle,
 } from "lucide-react";
 
-type Slot = { start: string; end: string; capacityLeft: number };
+type Slot = {
+  slotRecordId: string;
+  slotIndex: number;
+  start: string;
+  end: string;
+  capacity: number;
+  capacityLeft: number;
+};
 
 export default function SlotPicker({
   interviewId,
@@ -24,20 +31,45 @@ export default function SlotPicker({
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Slot | null>(null);
-  const [hold, setHold] = useState<{ holdId: string; expiresAt: string } | null>(
-    null
-  );
+
+  const [hold, setHold] = useState<{
+    holdId: string;
+    expiresAt: string;
+    slotRecordId: string;
+    slotIndex: number;
+  } | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const [alreadyBooked, setAlreadyBooked] = useState(false); // 🔒 NEW
+  const [alreadyBooked, setAlreadyBooked] = useState(false);
 
-  // ------------------------------
-  // 🔥 Check if candidate already booked
-  // ------------------------------
+  // --------------------------------------------------------
+  // FILTER FUTURE SLOTS
+  // --------------------------------------------------------
+  const filterFutureSlots = (slots: Slot[]) => {
+    const now = new Date();
+
+    return slots.filter((slot) => {
+      const endTime = new Date(slot.end);
+      return endTime > now; // Keep only future slots
+    });
+  };
+
+  // Live auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSlots((prev) => filterFutureSlots(prev));
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --------------------------------------------------------
+  // CHECK EXISTING BOOKING
+  // --------------------------------------------------------
   useEffect(() => {
     if (!candidateId) return;
     checkExistingBooking();
-  }, [candidateId, interviewId]);
+  }, [candidateId]);
 
   async function checkExistingBooking() {
     try {
@@ -45,15 +77,13 @@ export default function SlotPicker({
         `/api/bookings/status?interviewId=${interviewId}&candidateId=${candidateId}`
       );
       const json = await res.json();
-      if (json.hasBooking) {
-        setAlreadyBooked(true);
-      }
-    } catch (err) {}
+      if (json.hasBooking) setAlreadyBooked(true);
+    } catch {}
   }
 
-  // ------------------------------
-  // Fetch slots
-  // ------------------------------
+  // --------------------------------------------------------
+  // FETCH SLOTS
+  // --------------------------------------------------------
   useEffect(() => {
     fetchSlots();
   }, [interviewId]);
@@ -69,7 +99,9 @@ export default function SlotPicker({
       const json = await res.json();
 
       if (!res.ok) throw new Error(json.error || "Failed to load slots");
-      setSlots(json.slots ?? []);
+
+      // Filter expired slots
+      setSlots(filterFutureSlots(json.slots ?? []));
     } catch (e: any) {
       setError(e.message);
     }
@@ -77,9 +109,9 @@ export default function SlotPicker({
     setLoading(false);
   }
 
-  // ------------------------------
-  // HOLD
-  // ------------------------------
+  // --------------------------------------------------------
+  // HOLD SLOT
+  // --------------------------------------------------------
   async function createHold() {
     if (!selected) return;
 
@@ -89,35 +121,41 @@ export default function SlotPicker({
       body: JSON.stringify({
         interviewId,
         candidateId,
-        start: selected.start,
-        end: selected.end,
+        slotRecordId: selected.slotRecordId,
+        slotIndex: selected.slotIndex,
       }),
     });
 
     const json = await res.json();
 
     if (res.ok) {
-      setHold(json);
+      setHold({
+        holdId: json.holdId,
+        expiresAt: json.expiresAt,
+        slotRecordId: selected.slotRecordId,
+        slotIndex: selected.slotIndex,
+      });
       setTimeLeft(300);
     } else {
-      if (json.error === "already_booked") {
-        setAlreadyBooked(true);
-      }
+      if (json.error === "already_booked") setAlreadyBooked(true);
       setError(json.error || "Cannot hold slot");
       fetchSlots();
     }
   }
 
-  // ------------------------------
-  // CONFIRM
-  // ------------------------------
+  // --------------------------------------------------------
+  // CONFIRM BOOKING
+  // --------------------------------------------------------
   async function confirmHold() {
-    if (!hold) return;
+    if (!hold || !selected) return;
 
     const res = await fetch(`/api/bookings/confirm`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ holdId: hold.holdId, candidateId }),
+      body: JSON.stringify({
+        holdId: hold.holdId,
+        candidateId,
+      }),
     });
 
     const json = await res.json();
@@ -127,11 +165,14 @@ export default function SlotPicker({
         "bookingId",
         JSON.stringify({
           id: json.bookingId,
-          start: selected?.start,
-          end: selected?.end,
           interviewId,
+          slotRecordId: selected.slotRecordId,
+          slotIndex: selected.slotIndex,
+          start: selected.start,
+          end: selected.end,
         })
       );
+
       window.location.href = `/interview/${interviewId}/scheduled`;
     } else {
       setError(json.error || "Confirm failed");
@@ -139,9 +180,9 @@ export default function SlotPicker({
     }
   }
 
-  // ------------------------------
+  // --------------------------------------------------------
   // CANCEL HOLD
-  // ------------------------------
+  // --------------------------------------------------------
   async function cancelHold(auto = false) {
     if (!hold) return;
 
@@ -149,7 +190,7 @@ export default function SlotPicker({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        bookingId: hold.holdId,
+        holdId: hold.holdId,
         candidateId,
       }),
     });
@@ -162,17 +203,15 @@ export default function SlotPicker({
       setTimeLeft(null);
       fetchSlots();
 
-      if (auto) {
-        setError("Your held slot expired and was released.");
-      }
+      if (auto) setError("Your held slot expired and was released.");
     } else {
       setError(json.error || "Cancel failed");
     }
   }
 
-  // ------------------------------
-  // TIMER: Auto-cancel
-  // ------------------------------
+  // --------------------------------------------------------
+  // AUTO TIMER
+  // --------------------------------------------------------
   useEffect(() => {
     if (!hold || timeLeft === null) return;
 
@@ -188,6 +227,7 @@ export default function SlotPicker({
     return () => clearInterval(interval);
   }, [hold, timeLeft]);
 
+  // Helpers
   const formatTimer = (seconds: number | null) => {
     if (seconds === null) return "";
     const m = Math.floor(seconds / 60);
@@ -215,15 +255,20 @@ export default function SlotPicker({
     })}`;
   };
 
+  // --------------------------------------------------------
+  // UI
+  // --------------------------------------------------------
+
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 font-sans">
       <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
-        {/* Header */}
+        {/* header */}
         <div className="bg-slate-50/50 px-6 py-8 border-b border-slate-100 sm:flex sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Select an Interview Slot</h2>
+            <h2 className="text-2xl font-bold text-slate-900">
+              Select an Interview Slot
+            </h2>
 
-            {/* 🔒 Already Booked Message */}
             {alreadyBooked && (
               <p className="text-red-600 text-sm mt-2 font-medium">
                 You have already booked a slot for this interview.
@@ -246,7 +291,8 @@ export default function SlotPicker({
         </div>
 
         <div className="p-6 sm:p-8">
-          {/* Error */}
+
+          {/* ERROR */}
           {error && (
             <div className="mb-6 flex items-start gap-3 bg-red-50 text-red-700 p-4 rounded-xl border border-red-100">
               <AlertCircle className="w-5 h-5" />
@@ -257,102 +303,59 @@ export default function SlotPicker({
             </div>
           )}
 
-          {/* If already booked → show lock message & hide slots */}
+          {/* Already booked UI */}
           {alreadyBooked ? (
-<div className="py-16 flex flex-col items-center justify-center text-center px-6">
+            <div className="py-16 flex flex-col items-center justify-center text-center px-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                Booking Already Exists
+              </h2>
+              <p className="text-red-600 text-sm font-medium mb-4">
+                You have already booked a slot.
+              </p>
 
-   
-
-    {/* Title */}
-    <h2 className="text-2xl font-bold text-gray-900 mb-3">
-      Booking Already Exists
-    </h2>
-
-    {/* Warning box */}
-    <div className="mb-8 flex items-start gap-3 bg-amber-50 border border-amber-100 rounded-lg p-4 text-left max-w-md">
-      <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-      <div>
-        <p className="text-sm font-medium text-amber-900">Slot Locked</p>
-        <p className="text-sm text-amber-700 mt-1 leading-relaxed">
-          You have already booked a slot for this interview.  
-          You cannot select another at this time.
-        </p>
-      </div>
-    </div>
-
-    {/* Buttons */}
-    <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
-
-      {/* View Scheduled */}
-      <a
-  href={`/interview/${interviewId}/scheduled`}
-  className="
-    group flex-1 flex items-center justify-center gap-2 px-6 py-3 
-    rounded-xl text-sm font-semibold
-    text-blue-600 bg-white
-    border border-blue-400
-    hover:bg-blue-100 hover:border-blue-500
-    active:bg-blue-200
-    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-    transition-all duration-200
-  "
->
-  <Calendar className="w-4 h-4 text-blue-600 transition-transform group-hover:scale-110" />
-  View Schedule
-</a>
-
-<a
-  href={`/interview/${interviewId}/start-interview`}
-  className="
-    group flex-1 flex items-center justify-center gap-2 px-6 py-3
-    rounded-xl text-sm font-semibold text-white
-    bg-blue-600
-    shadow-md shadow-blue-500/20
-    hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-500/30 hover:translate-y-[-1px]
-    active:bg-blue-800 active:translate-y-[1px] active:shadow-none
-    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-    transition-all duration-200
-  "
->
-  Start Interview
-  <ChevronRight className="w-4 h-4 text-white transition-transform group-hover:translate-x-1" />
-</a>
-
-    </div>
-
-  </div>
-
-) : (
+              <a
+                href={`/interview/${interviewId}/scheduled`}
+                className="text-blue-600 underline"
+              >
+                View scheduled time
+              </a>
+            </div>
+          ) : (
             <>
+
               {/* Loading */}
               {loading && (
                 <div className="py-20 flex flex-col items-center">
                   <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
-                  <p className="text-sm text-slate-500">Checking availability...</p>
+                  <p className="text-sm text-slate-500">
+                    Checking availability...
+                  </p>
                 </div>
               )}
 
-              {/* Empty */}
-              {!loading && !error && slots.length === 0 && (
+              {/* No slots */}
+              {!loading && slots.length === 0 && (
                 <div className="py-20 text-center text-slate-400">
                   <Calendar className="w-12 h-12 mx-auto mb-4 opacity-20" />
                   <p>No slots available at this time.</p>
                 </div>
               )}
 
-              {/* Slots Grid */}
+              {/* Slot grid */}
               {!loading && slots.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {slots.map((slot, index) => {
-                    const isSelected = selected === slot;
+                  {slots.map((slot) => {
+                    const isSelected =
+                      selected?.slotRecordId === slot.slotRecordId &&
+                      selected?.slotIndex === slot.slotIndex;
+
                     const holdActive = !!hold && isSelected;
 
                     return (
                       <div
-                        key={index}
+                        key={`${slot.slotRecordId}-${slot.slotIndex}`}
                         onClick={() => !hold && setSelected(slot)}
-                        className={`
-                          group relative flex flex-col p-5 rounded-xl border-2 transition-all cursor-pointer
+                        className={`group relative flex flex-col p-5 rounded-xl border-2 transition-all cursor-pointer
                           ${
                             isSelected
                               ? "border-blue-600 bg-blue-50/40 ring-4 ring-blue-50 shadow-md"
@@ -361,25 +364,28 @@ export default function SlotPicker({
                           ${hold && !isSelected ? "opacity-40 grayscale cursor-not-allowed" : ""}
                         `}
                       >
-                        {/* Checkmark */}
+                        {/* checkmark */}
                         <div
-                          className={`
-                            absolute top-4 right-4 w-6 h-6 rounded-full border flex items-center justify-center
+                          className={`absolute top-4 right-4 w-6 h-6 rounded-full border flex items-center justify-center
                             ${isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300"}
                           `}
                         >
-                          {isSelected && <CheckCircle2 className="w-4 h-4 text-white" />}
+                          {isSelected && (
+                            <CheckCircle2 className="w-4 h-4 text-white" />
+                          )}
                         </div>
 
-                        {/* Time */}
+                        {/* DATE */}
                         <span
                           className={`text-xs font-bold uppercase tracking-wide mb-1 ${
                             isSelected ? "text-blue-600" : "text-slate-400"
                           }`}
                         >
-                          {formatDate(slot.start).day}, {formatDate(slot.start).date}
+                          {formatDate(slot.start).day},{" "}
+                          {formatDate(slot.start).date}
                         </span>
 
+                        {/* TIME */}
                         <div
                           className={`text-xl font-semibold mb-3 ${
                             isSelected ? "text-slate-900" : "text-slate-700"
@@ -388,7 +394,7 @@ export default function SlotPicker({
                           {formatTimeRange(slot.start, slot.end)}
                         </div>
 
-                        {/* Capacity */}
+                        {/* CAPACITY */}
                         <div className="text-xs text-slate-500 border-t border-slate-200 pt-3 mt-3 flex justify-between">
                           <div className="flex items-center gap-1.5">
                             <Users className="w-3.5 h-3.5" />
@@ -402,9 +408,9 @@ export default function SlotPicker({
                           )}
                         </div>
 
-                        {/* Inline Actions */}
-                        {isSelected && !alreadyBooked && (
-                          <div className="mt-5 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2">
+                        {/* ACTIONS */}
+                        {isSelected && (
+                          <div className="mt-5 flex flex-col gap-2">
                             {!hold && (
                               <button
                                 onClick={(e) => {
@@ -418,7 +424,7 @@ export default function SlotPicker({
                               </button>
                             )}
 
-                            {hold && (
+                            {holdActive && (
                               <>
                                 <button
                                   onClick={(e) => {
@@ -442,7 +448,6 @@ export default function SlotPicker({
                                   Cancel Hold
                                 </button>
 
-                                {/* Timer */}
                                 <div className="text-xs text-amber-600 font-semibold text-center">
                                   Auto-cancelling in {formatTimer(timeLeft)}
                                 </div>
@@ -459,20 +464,18 @@ export default function SlotPicker({
           )}
         </div>
 
-      <div
-  className={`
-    p-6 border-t text-center text-sm
-    ${alreadyBooked
-      ? "bg-red-50 border-red-200 text-red-600"
-      : "bg-slate-50 border-slate-200 text-slate-500"
-    }
-  `}
->
-  {alreadyBooked
-    ? "You already booked, you cannot book another slot."
-    : "Select a slot above to continue"}
-</div>
-
+        {/* footer */}
+        <div
+          className={`p-6 border-t text-center text-sm ${
+            alreadyBooked
+              ? "bg-red-50 border-red-200 text-red-600"
+              : "bg-slate-50 border-slate-200 text-slate-500"
+          }`}
+        >
+          {alreadyBooked
+            ? "You already booked, you cannot book another slot."
+            : "Select a slot above to continue"}
+        </div>
       </div>
     </div>
   );

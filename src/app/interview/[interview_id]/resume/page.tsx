@@ -197,12 +197,12 @@ export default function ResumePage() {
           <TechLoader active={true} />
         </div>
       )}
-
+ 
       {/* Hide form while loading */}
       {!loading && (
         <Card className="w-full max-w-3xl rounded-2xl shadow-lg bg-white border border-gray-200 p-6">
           <CardHeader className="pb-6 border-b">
-            <CardTitle className="text-3xl font-semibold text-gray-900">
+            <CardTitle className="text-xl font-bold text-slate-900 tracking-tight">
               Resume Analysis
             </CardTitle>
             <p className="text-sm text-gray-500 mt-1">

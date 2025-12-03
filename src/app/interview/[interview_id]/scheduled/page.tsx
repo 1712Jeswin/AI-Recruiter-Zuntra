@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Calendar,
   Clock,
-  Video,
   ArrowRight,
   MapPin,
   Copy,
@@ -15,7 +14,7 @@ import {
 } from "lucide-react";
 
 // --------------------------------------
-// EXECUTIVE LOADER (INLINE)
+// EXECUTIVE LOADER
 // --------------------------------------
 const ExecutiveLoader = () => {
   const [progress, setProgress] = useState(0);
@@ -25,7 +24,7 @@ const ExecutiveLoader = () => {
     "Checking your session...",
     "Verifying booking status...",
     "Syncing your calendar...",
-    "Preparing interview portal..."
+    "Preparing interview portal...",
   ];
 
   useEffect(() => {
@@ -49,7 +48,6 @@ const ExecutiveLoader = () => {
 
   return (
     <div className="flex flex-col items-center gap-6">
-      {/* PROGRESS CIRCLE */}
       <div className="relative w-28 h-28 flex items-center justify-center">
         <svg className="w-28 h-28 transform -rotate-90">
           <circle
@@ -85,7 +83,6 @@ const ExecutiveLoader = () => {
         </div>
       </div>
 
-      {/* TEXT */}
       <h2 className="text-lg font-semibold text-slate-800">
         {progress === 100 ? "Loading…" : "Setting things up"}
       </h2>
@@ -101,7 +98,6 @@ interface Booking {
   start: string;
   end?: string;
   meetingLink?: string;
-  title?: string;
   [key: string]: any;
 }
 
@@ -111,32 +107,51 @@ export default function ScheduledPage() {
   const interview_id = params?.interview_id as string;
 
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
   // countdown
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
+  // --------------------------------------
+  // FETCH BOOKING FROM BACKEND
+  // --------------------------------------
   useEffect(() => {
-    const b = localStorage.getItem("bookingId");
-    if (b) setBooking(JSON.parse(b));
+    async function loadBooking() {
+      const res = await fetch(`/api/bookings/get-time?interview_id=${interview_id}`);
+      const data = await res.json();
 
-    // simulate tiny delay to show loader (optional)
-    else setTimeout(() => setBooking(null), 600);
-  }, []);
+      if (data?.start) {
+        setBooking(data);
+      }
 
-  // countdown effect
+      setLoading(false);
+    }
+
+    loadBooking();
+  }, [interview_id]);
+
+  // --------------------------------------
+  // COUNTDOWN EFFECT
+  // --------------------------------------
   useEffect(() => {
     if (!booking?.start) return;
 
     const startTime = new Date(booking.start).getTime();
-    const interval = setInterval(() => {
-      const diff = Math.floor((startTime - Date.now()) / 1000);
-      if (diff <= 0) {
-        setTimeLeft(0);
-        clearInterval(interval);
-      } else setTimeLeft(diff);
-    }, 1000);
 
+    if (isNaN(startTime)) {
+      console.error("Invalid start time:", booking.start);
+      return;
+    }
+
+    const update = () => {
+      const diff = Math.floor((startTime - Date.now()) / 1000);
+      setTimeLeft(diff <= 0 ? 0 : diff);
+    };
+
+    update(); // run immediately once
+
+    const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, [booking]);
 
@@ -148,33 +163,23 @@ export default function ScheduledPage() {
     return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
   };
 
-  // ---------------------------------------------------
-  // NO BOOKING FOUND — SHOW EXECUTIVE LOADER
-  // ---------------------------------------------------
-  if (!booking) {
+  // --------------------------------------
+  // SHOW EXECUTIVE LOADER UNTIL BOOKING LOADED
+  // --------------------------------------
+  if (loading || !booking) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-8">
         <div className="bg-white px-10 py-12 rounded-2xl shadow-xl border border-slate-200 w-full max-w-md text-center">
           <ExecutiveLoader />
-
-          <p className="text-sm text-slate-500 mt-6">
-            Looking for your booking…
-          </p>
-
-          <button
-            onClick={() => router.push("/")}
-            className="mt-6 text-sm text-indigo-600 hover:text-indigo-700 underline"
-          >
-            Try Again Later
-          </button>
+          <p className="text-sm text-slate-500 mt-6">Looking for your booking…</p>
         </div>
       </div>
     );
   }
 
-  // ---------------------------------------------------
-  // SUCCESS PAGE (already booked)
-  // ---------------------------------------------------
+  // --------------------------------------
+  // SUCCESS PAGE
+  // --------------------------------------
   const startDate = new Date(booking.start);
   const endDate = booking.end ? new Date(booking.end) : null;
 
@@ -247,7 +252,11 @@ export default function ScheduledPage() {
                 <Clock className="w-4 h-4" /> Interview starts in:
               </p>
               <p className="text-2xl font-bold text-blue-900 mt-1">
-                {timeLeft !== null ? formatCountdown(timeLeft) : "---"}
+                {timeLeft === null
+                  ? "---"
+                  : timeLeft <= 0
+                  ? "Starting now"
+                  : formatCountdown(timeLeft)}
               </p>
             </div>
 
@@ -287,15 +296,24 @@ export default function ScheduledPage() {
             )}
 
             {/* Start Button */}
-            <button
-              onClick={() =>
-                router.push(`interview/${interview_id}/start-interview`)
-              }
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold py-3.5 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
-            >
-              Go to Interview Dashboard
-              <ArrowRight className="w-5 h-5" />
-            </button>
+        <button
+  disabled={timeLeft === null || timeLeft > 0}  // 🔒 lock before start
+  onClick={() =>
+    timeLeft <= 0 &&
+    router.push(`interview/${interview_id}/start-interview`)
+  }
+  className={`w-full text-lg font-semibold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 transition-all
+    ${
+      timeLeft <= 0
+        ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:-translate-y-0.5"
+        : "bg-slate-300 text-slate-500 cursor-not-allowed"
+    }
+  `}
+>
+  {timeLeft > 0 ? "Interview Not Started" : "Go to Interview Dashboard"}
+  <ArrowRight className="w-5 h-5" />
+</button>
+
           </div>
 
           {/* Footer */}

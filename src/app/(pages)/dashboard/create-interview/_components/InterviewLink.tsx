@@ -18,10 +18,12 @@ import Link from "next/link";
 
 const InterviewLink = ({
   interviewId,
+  onCreate,
   onReset,
 }: {
   interviewId: string;
   onReset?: () => void;
+    onCreate?: (id: string) => void;
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -163,15 +165,36 @@ const InterviewLink = ({
       </div>
 
       {/* Bottom Buttons */}
-      <div className="w-full md:w-[600px] flex justify-between mt-8">
-        <Link href={"/dashboard"}>
-          <Button variant="outline">← Back to Dashboard</Button>
-        </Link>
+     {/* Bottom Buttons */}
+<div className="w-full md:w-[600px] flex flex-col sm:flex-row justify-between gap-3 mt-8">
 
-        <Button onClick={() => onReset?.()} className="bg-blue-600 text-white">
-          + Create New Interview
-        </Button>
-      </div>
+  {/* Back to Dashboard */}
+  <Link href={"/dashboard"} className="flex-1">
+    <Button variant="outline" className="w-full">
+      ← Back to Dashboard
+    </Button>
+  </Link>
+
+  {/* ⭐ NEXT: GO TO SLOT CREATION (STEP 4) */}
+  <Button
+     onClick={() => onCreate?.(interviewId)}
+    className="
+      flex-1 w-full bg-blue-600 text-white hover:bg-blue-700 
+      shadow-md hover:shadow-lg transition-all duration-200
+    "
+  >
+    Next: Create Slots →
+  </Button>
+
+  {/* Create New Interview */}
+  {/* <Button
+    onClick={() => onReset?.()}
+    className="flex-1 bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200"
+  >
+    + Create New Interview
+  </Button> */}
+</div>
+
     </div>
   );
 };
