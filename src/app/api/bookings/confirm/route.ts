@@ -31,7 +31,9 @@ export async function POST(req: Request) {
     if (new Date(hold.expiresAt) < new Date())
       return NextResponse.json({ error: "hold_expired" }, { status: 410 });
 
-
+    // --------------------------------------------------
+    // Load slotRecord to extract start/end from JSON array
+    // --------------------------------------------------
     // --------------------------------------------------
     // Load slotRecord to extract start/end from JSON array
     // --------------------------------------------------
@@ -43,15 +45,23 @@ export async function POST(req: Request) {
     )[0];
 
     if (!slotRecord)
-      return NextResponse.json({ error: "slot_record_not_found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "slot_record_not_found" },
+        { status: 404 }
+      );
 
-    const slots = slotRecord.slots || [];
+    // ⭐ FIX: Ensure slots is always an array
+    const slots: Array<{ start: string; end: string }> = Array.isArray(
+      slotRecord.slots
+    )
+      ? slotRecord.slots
+      : [];
 
-    if (
-      hold.slotIndex < 0 ||
-      hold.slotIndex >= slots.length
-    ) {
-      return NextResponse.json({ error: "invalid_slot_index" }, { status: 400 });
+    if (hold.slotIndex < 0 || hold.slotIndex >= slots.length) {
+      return NextResponse.json(
+        { error: "invalid_slot_index" },
+        { status: 400 }
+      );
     }
 
     const selectedSlot = slots[hold.slotIndex];

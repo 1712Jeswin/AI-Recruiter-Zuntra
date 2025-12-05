@@ -5,10 +5,10 @@ import { eq } from "drizzle-orm";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { id } = await props.params;
 
     if (!id) {
       return NextResponse.json(

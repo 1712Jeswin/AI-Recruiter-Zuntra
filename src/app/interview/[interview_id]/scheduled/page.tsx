@@ -118,7 +118,9 @@ export default function ScheduledPage() {
   // --------------------------------------
   useEffect(() => {
     async function loadBooking() {
-      const res = await fetch(`/api/bookings/get-time?interview_id=${interview_id}`);
+      const res = await fetch(
+        `/api/bookings/get-time?interview_id=${interview_id}`
+      );
       const data = await res.json();
 
       if (data?.start) {
@@ -171,7 +173,9 @@ export default function ScheduledPage() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-8">
         <div className="bg-white px-10 py-12 rounded-2xl shadow-xl border border-slate-200 w-full max-w-md text-center">
           <ExecutiveLoader />
-          <p className="text-sm text-slate-500 mt-6">Looking for your booking…</p>
+          <p className="text-sm text-slate-500 mt-6">
+            Looking for your booking…
+          </p>
         </div>
       </div>
     );
@@ -296,24 +300,28 @@ export default function ScheduledPage() {
             )}
 
             {/* Start Button */}
-        <button
-  disabled={timeLeft === null || timeLeft > 0}  // 🔒 lock before start
-  onClick={() =>
-    timeLeft <= 0 &&
-    router.push(`interview/${interview_id}/start`)
-  }
-  className={`w-full text-lg font-semibold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 transition-all
+            <button
+              disabled={timeLeft === null || timeLeft > 0}
+              onClick={() =>
+                timeLeft !== null &&
+                timeLeft <= 0 &&
+                router.push(`interview/${interview_id}/start-interview`)
+              }
+              className={`w-full text-lg font-semibold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 transition-all
     ${
-      timeLeft <= 0
+      timeLeft !== null && timeLeft <= 0
         ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:-translate-y-0.5"
         : "bg-slate-300 text-slate-500 cursor-not-allowed"
     }
   `}
->
-  {timeLeft > 0 ? "Interview Not Started" : "Go to Interview Dashboard"}
-  <ArrowRight className="w-5 h-5" />
-</button>
-
+            >
+              {timeLeft === null
+                ? "Loading..."
+                : timeLeft > 0
+                ? "Interview Not Started"
+                : "Go to Interview Dashboard"}
+              <ArrowRight className="w-5 h-5" />
+            </button>
           </div>
 
           {/* Footer */}

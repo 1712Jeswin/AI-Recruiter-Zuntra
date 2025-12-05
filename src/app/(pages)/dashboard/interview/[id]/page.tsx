@@ -1,14 +1,13 @@
+
 // app/interviews/[id]/page.tsx
 import React from "react";
 import { getInterviewDetails } from "./actions";
 import { Card } from "@/components/ui/card";
 import InterviewLeaderboardClient from "../../_components/InterviewLeaderboard.client";
-import CheatMonitorWrapper from "./_components/CheatMonitorWrapper";
-
-
+// import CheatMonitorWrapper from "./_components/CheatMonitorWrapper";
 
 /**
- * Types — placed here as you requested (Option 3)
+ * Types
  */
 export type Interview = {
   id: string;
@@ -34,30 +33,30 @@ export type LeaderboardCandidate = {
 /**
  * Server component
  */
-type PageProps = {
-  params: { id: string };
-};
 
-export default async function InterviewDetails({ params }: PageProps) {
-   const { id: interviewId } = await params;
 
-  // keep exact same semantics as your original reference
+export default async function InterviewDetails(
+  props: { params: Promise<{ id: string }> }
+) {
+  const { id: interviewId } = await props.params;
+
   const { interview, candidates } = await getInterviewDetails(interviewId);
 
   if (!interview) {
-    return <div className="p-10 text-center text-red-500">Interview not found.</div>;
+    return (
+      <div className="p-10 text-center text-red-500">Interview not found.</div>
+    );
   }
 
-  // Normalize / JSON-serializable candidates for client component.
-  // Expectation: your getInterviewDetails SHOULD return candidates with atsScore (e.g., joined from feedback).
-  const safeCandidates: LeaderboardCandidate[] = (candidates || []).map((c: any) => ({
-    id: String(c.id),
-    fullName: String(c.fullName ?? ""),
-    email: String(c.email ?? ""),
-    atsScore: Number(c.atsScore ?? 0),
-  }));
+  const safeCandidates: LeaderboardCandidate[] = (candidates || []).map(
+    (c: any) => ({
+      id: String(c.id),
+      fullName: String(c.fullName ?? ""),
+      email: String(c.email ?? ""),
+      atsScore: Number(c.atsScore ?? 0),
+    })
+  );
 
-  // Normalize interview fields if needed for display (avoid passing Dates)
   const safeInterview: Interview = {
     id: String(interview.id),
     userId: String(interview.userId ?? ""),
@@ -72,14 +71,9 @@ export default async function InterviewDetails({ params }: PageProps) {
     userEmail: interview.userEmail ?? null,
   };
 
-
-
   return (
     <div className="p-7">
-        {/* 🔥 CHEATING DETECTION RUNS HERE */}
-      {/* <div className="mb-8">
-         <CheatMonitorWrapper />
-      </div> */}
+      {/* <CheatMonitorWrapper /> */}
       <h1 className="text-2xl font-semibold mb-4">
         {safeInterview.jobPosition} – Candidate Leaderboard
       </h1>
@@ -90,14 +84,22 @@ export default async function InterviewDetails({ params }: PageProps) {
 
       <Card className="p-5 mb-6">
         <div className="text-sm text-slate-600">
-          Interview ID: <span className="font-medium text-slate-800">{safeInterview.id ?? interviewId}</span>
+          Interview ID:{" "}
+          <span className="font-medium text-slate-800">
+            {safeInterview.id ?? interviewId}
+          </span>
           <span className="mx-2">•</span>
-          Created: <span className="font-medium text-slate-800">{String(safeInterview.createdAt) ?? "—"}</span>
+          Created:{" "}
+          <span className="font-medium text-slate-800">
+            {String(safeInterview.createdAt) ?? "—"}
+          </span>
         </div>
       </Card>
 
-      {/* Client-side UI — pass down interview & safe candidates */}
-      <InterviewLeaderboardClient interview={safeInterview} candidates={safeCandidates} />
+      <InterviewLeaderboardClient
+        interview={safeInterview}
+        candidates={safeCandidates}
+      />
     </div>
   );
 }

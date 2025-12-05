@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "already_booked" }, { status: 409 });
 
     // ------------------------------
-    // 3. Fetch the slot record
+    // 3. Fetch slot record
     // ------------------------------
     const slotRows = await db
       .select()
@@ -56,7 +56,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "slot_record_not_found" }, { status: 404 });
 
     const slotRecord = slotRows[0];
-    const slots = slotRecord.slots || [];
+
+    // ⭐ FIX: ensure slots is ALWAYS an array (prevents TS error)
+    const slots = Array.isArray(slotRecord.slots) ? slotRecord.slots : [];
 
     if (slotIndex < 0 || slotIndex >= slots.length) {
       return NextResponse.json({ error: "invalid_slot_index" }, { status: 400 });

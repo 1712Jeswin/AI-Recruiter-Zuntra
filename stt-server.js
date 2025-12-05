@@ -3,7 +3,6 @@ const express = require("express");
 const { createServer } = require("http");
 const { WebSocketServer } = require("ws");
 const { SpeechClient } = require("@google-cloud/speech");
-const { spawn } = require("child_process");
 
 const app = express();
 const server = createServer(app);
@@ -15,59 +14,42 @@ const client = new SpeechClient({
 });
 
 wss.on("connection", (ws) => {
-  console.log("🔌 Client connected to STT");
+  console.log("🔌 Client connected to STT server");
 
-  // 🔥 Create Google Speech streamingRecognize stream
-  const recognizeStream = client
+  let recognizeStream = client
     .streamingRecognize({
       config: {
-        encoding: "LINEAR16",
-        sampleRateHertz: 16000,
+        encoding: "WEBM_OPUS",
+        sampleRateHertz: 48000,
         languageCode: "en-US",
       },
-      interimResults: true,
+      interimResults: true, // Google returns interim + final
     })
     .on("data", (data) => {
       const result = data.results?.[0];
       if (!result) return;
 
-      const transcript = result.alternatives?.[0]?.transcript?.trim();
-      if (!transcript) return;
+      const transcript = result.alternatives?.[0]?.transcript?.trim() || "";
 
-      if (result.isFinal) {
+      // 🔥 ONLY send FINAL RESULTS — never interim
+      if (result.isFinal && transcript.length > 0) {
         console.log("🎤 FINAL:", transcript);
         ws.send(JSON.stringify({ text: transcript }));
       }
     })
     .on("error", (err) => {
-      console.error("🔥 Google STT error:", err);
+      console.error("🔥 STT ERROR:", err);
+      ws.send(JSON.stringify({ error: "stt_error" }));
     });
 
-  // 🔥 FFMPEG converts WebM Opus → raw PCM16
-  const ffmpeg = spawn("ffmpeg", [
-    "-loglevel", "quiet", // remove spam
-    "-i", "pipe:0",       // input from websocket
-    "-f", "s16le",        // raw PCM16 format
-    "-acodec", "pcm_s16le",
-    "-ac", "1",           // mono
-    "-ar", "16000",       // 16kHz
-    "pipe:1"              // output to Google STT stream
-  ]);
-
-  // FFmpeg output goes to Google
-  ffmpeg.stdout.on("data", (chunk) => {
-    recognizeStream.write(chunk);
-  });
-
-  // Incoming audio from browser → feed into ffmpeg
   ws.on("message", (msg) => {
-    ffmpeg.stdin.write(msg);
+    // Forward raw audio chunks to Google
+    if (recognizeStream) recognizeStream.write(msg);
   });
 
   ws.on("close", () => {
     console.log("❌ STT connection closed");
-    recognizeStream.end();
-    ffmpeg.stdin.end();
+    if (recognizeStream) recognizeStream.end();
   });
 });
 

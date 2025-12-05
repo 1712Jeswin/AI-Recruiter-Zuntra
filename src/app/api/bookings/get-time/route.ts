@@ -18,8 +18,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   return NextResponse.json({
-    ...record,
-    start: new Date(record.start).toISOString(),
-    end: new Date(record.end).toISOString(),
-  });
+  ...record,
+  start: record.start ? new Date(record.start).toISOString() : null,
+  end: record.end ? new Date(record.end).toISOString() : null,
+});
+
 }

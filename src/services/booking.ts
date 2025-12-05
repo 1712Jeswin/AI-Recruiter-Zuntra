@@ -1,5 +1,7 @@
 // services/booking.ts
-import { addMinutes } from "date-fns";
+import { addMinutes } from "date-fns/addMinutes";
+
+
 
 /**
  * Generate slots for a simple availability object.
