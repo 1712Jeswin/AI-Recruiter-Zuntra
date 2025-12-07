@@ -25,7 +25,7 @@ interface InterviewItemCardProps {
     jobPosition: string | null;
     experienceLevel: string | null;
     createdAt: Date;
-    expiredAt: Date;
+    expiresAt: Date | null;
     duration?: string | null;
     type?: string[]; // tags array
   };
@@ -110,35 +110,34 @@ const InterviewItemCard = ({ interview }: InterviewItemCardProps) => {
                         year: "numeric",
                     })}
                 </span> */}
-       <div className="flex flex-col items-end">
-  {/* Date */}
-  <span className="text-xs font-medium text-gray-500">
-    {new Date(interview.createdAt).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    })}
-  </span>
+        <div className="flex flex-col items-end">
+          {/* Date */}
+          <span className="text-xs font-medium text-gray-500">
+            {new Date(interview.createdAt).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
 
-  {/* ACTIVE / EXPIRED TAG */}
-  {interview.expiresAt &&
-    (new Date(interview.expiresAt) < new Date() ? (
-      <span
-        className="mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full 
+          {/* ACTIVE / EXPIRED TAG */}
+          {interview.expiresAt &&
+            (new Date(interview.expiresAt) < new Date() ? (
+              <span
+                className="mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full 
                     bg-red-100 text-red-700 animate-pulse shadow-sm"
-      >
-        EXPIRED
-      </span>
-    ) : (
-      <span
-        className="mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full 
+              >
+                EXPIRED
+              </span>
+            ) : (
+              <span
+                className="mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full 
                     bg-green-200 text-green-700 shadow-sm"
-      >
-        ACTIVE
-      </span>
-    ))}
-</div>
-
+              >
+                ACTIVE
+              </span>
+            ))}
+        </div>
       </div>
 
       {/* Title & Info */}

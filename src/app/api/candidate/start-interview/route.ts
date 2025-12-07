@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { booking } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { issueInterviewToken } from "@/services/token";
+import { issueInterviewToken } from "@/services/tokens";
 
 const TOKEN_PREWARM = Number(process.env.TOKEN_PREWARM_MINUTES ?? 10);
 

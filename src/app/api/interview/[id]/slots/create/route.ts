@@ -4,9 +4,12 @@ import { interview, interviewSlot } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
-export async function POST(req: Request, context: { params: { id: string } }) {
+export async function POST(
+  req: Request,
+  props: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id: interviewId } = await context.params;
+    const { id: interviewId } = await props.params;
     const { slots } = await req.json();
 
     if (!interviewId) {

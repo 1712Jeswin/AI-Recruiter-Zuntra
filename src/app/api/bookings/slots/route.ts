@@ -27,8 +27,7 @@ export async function GET(req: Request) {
     }
 
     const slotRecord = slotRows[0]; // only one row
-    const slots = slotRecord.slots ?? [];
-
+    const slots = Array.isArray(slotRecord.slots) ? slotRecord.slots : [];
     const now = new Date();
 
     // Fetch holds (slotRecordId + slotIndex)

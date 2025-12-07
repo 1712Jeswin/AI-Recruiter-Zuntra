@@ -24,6 +24,7 @@ const InterviewLink = ({
   interviewId: string;
   formData: any; // contains slotStartDate, slotEndDate, duration, questionCount
   onReset?: () => void;
+  onCreate?: () => void;
 }) => {
   const [copied, setCopied] = useState(false);
 
