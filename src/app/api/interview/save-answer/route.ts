@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { interviewSession } from "@/db/schema";
 import { v4 as uuid } from "uuid";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
-// Save all answers at the end
+// POST /api/interview/[id]/answers
 export async function POST(req: NextRequest) {
   try {
-    const { interviewId, candidateId, answers } = await req.json();
+    const { interviewId, candidateId, answers, unblurCount } = await req.json();
 
     if (!interviewId || !candidateId || !Array.isArray(answers)) {
       return NextResponse.json(
@@ -18,21 +18,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if exists
+    // 🔍 Check if a session exists for THIS interview + THIS candidate
     const existing = await db
       .select()
       .from(interviewSession)
-      .where(eq(interviewSession.candidateId, candidateId));
+      .where(
+        and(
+          eq(interviewSession.interviewId, interviewId),
+          eq(interviewSession.candidateId, candidateId)
+        )
+      );
 
     let saved;
 
     if (existing.length > 0) {
+      const prev = existing[0];
+
+      // 🔥 Update existing session
       saved = await db
         .update(interviewSession)
-        .set({ answers })
-        .where(eq(interviewSession.candidateId, candidateId))
+        .set({
+          answers,
+          unblurCount: unblurCount ?? prev.unblurCount ?? 0,
+        })
+        .where(
+          and(
+            eq(interviewSession.interviewId, interviewId),
+            eq(interviewSession.candidateId, candidateId)
+          )
+        )
         .returning();
     } else {
+      // 🆕 Insert new record
       saved = await db
         .insert(interviewSession)
         .values({
@@ -40,6 +57,7 @@ export async function POST(req: NextRequest) {
           interviewId,
           candidateId,
           answers,
+          unblurCount: unblurCount ?? 0,
         })
         .returning();
     }

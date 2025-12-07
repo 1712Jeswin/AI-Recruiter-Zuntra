@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
-  Loader2,
   RefreshCcw,
   ArrowRight,
   Target,
@@ -10,7 +9,6 @@ import {
   Check,
   Code2,
   Pencil,
-  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -106,7 +104,7 @@ const QuestionsList: React.FC<QuestionsListProps> = ({
   }, [formData]);
 
   useEffect(() => {
-    if (Object.keys(formData).length > 0 && !loading) {
+    if (Object.keys(formData).length > 0) {
       generateAiInterviewQuestions();
     }
   }, [formData, generateAiInterviewQuestions]);

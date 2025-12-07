@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
-  Briefcase,
   Copy,
   Send,
   Tag,

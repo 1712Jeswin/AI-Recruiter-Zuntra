@@ -26,13 +26,32 @@ export async function POST(req: NextRequest) {
 
     const data = await response.json();
 
+    // ⭐ DEBUG: Catch Google errors
+    if (!response.ok) {
+      console.error("Google TTS Error Response:", data);
+      return NextResponse.json(
+        { error: data.error?.message || "Google TTS failed" },
+        { status: 500 }
+      );
+    }
+
+    // ⭐ Safety check
+    if (!data.audioContent) {
+      console.error("❌ No audioContent in response:", data);
+      return NextResponse.json(
+        { error: "No audioContent returned" },
+        { status: 500 }
+      );
+    }
+
     const audioBuffer = Buffer.from(data.audioContent, "base64");
 
     return new NextResponse(audioBuffer, {
-      headers: { "Content-Type": "audio/mpeg" },
+      headers: { "Content-Type": "audio/mpeg" }
     });
+
   } catch (e) {
-    console.error(e);
+    console.error("TTS ERROR:", e);
     return NextResponse.json({ error: "TTS failed" }, { status: 500 });
   }
 }

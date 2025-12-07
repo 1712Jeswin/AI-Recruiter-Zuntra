@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { feedback } from "@/db/schema";
-import { eq } from "drizzle-orm";
 
 export async function GET(
   req: Request,

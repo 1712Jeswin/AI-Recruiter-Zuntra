@@ -5,7 +5,6 @@ import {
   Trophy,
   Search,
   Mail,
-  Briefcase,
   Users,
   Award,
   ArrowUpRight,

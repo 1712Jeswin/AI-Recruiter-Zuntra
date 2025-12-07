@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Camera, Plus, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { getInterviews } from "../actions/getInterviews";
 import InterviewItemCard from "./InterviewItemCard";
 import { authClient } from "@/lib/auth-client";
@@ -34,23 +34,14 @@ const LatestInterviewsList = () => {
 
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Fetch only when session is ready and user has an email
-    if (session?.user?.email) {
-      getInterviewList();
-    } else if (!isSessionLoading && !session) {
-      setLoading(false);
-    }
-  }, [session, isSessionLoading]);
-
-  const getInterviewList = async () => {
+ 
+ const getInterviewList = useCallback(async () => {
     setLoading(true);
-    const email = session?.user?.email;
 
+    const email = session?.user?.email;
     if (email) {
       const result = await getInterviews(email);
 
-      // Normalize dates
       const normalized = result.map((i: any) => ({
         ...i,
         createdAt: new Date(i.createdAt),
@@ -61,7 +52,15 @@ const LatestInterviewsList = () => {
     }
 
     setLoading(false);
-  };
+  }, [session?.user?.email]);
+
+  useEffect(() => {
+    if (session?.user?.email) {
+      getInterviewList();
+    } else if (!isSessionLoading && !session) {
+      setLoading(false);
+    }
+  }, [session, isSessionLoading, getInterviewList]);
 
   return (
     <div className="my-7">

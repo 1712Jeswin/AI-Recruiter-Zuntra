@@ -1,18 +1,18 @@
 // EXECUTIVE LOADER (Interview Creation Theme)
 import { useEffect, useState } from "react";
-import { CheckCircle2, Target, FileCheck2 } from "lucide-react";
+import { CheckCircle2, Target } from "lucide-react";
+
+// 👇 Move steps outside component → stable reference → no ESLint warning
+const steps = [
+  "Analyzing job description...",
+  "Understanding skills & requirements...",
+  "Generating AI-tailored questions...",
+  "Preparing interview package..."
+];
 
 export const ExecutiveLoader = ({ active }: { active: boolean }) => {
   const [progress, setProgress] = useState(0);
   const [step, setStep] = useState(0);
-
-  // 👇 Interview-specific wording
-  const steps = [
-    "Analyzing job description...",
-    "Understanding skills & requirements...",
-    "Generating AI-tailored questions...",
-    "Preparing interview package..."
-  ];
 
   useEffect(() => {
     if (!active) {
@@ -40,6 +40,7 @@ export const ExecutiveLoader = ({ active }: { active: boolean }) => {
       clearInterval(stepTimer);
     };
   }, [active]);
+
 
   // circle math
   const radius = 30;

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Camera, Plus, Loader2, Filter, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { getInterviews } from "../dashboard/actions/getInterviews";
 import InterviewItemCard from "../dashboard/_components/InterviewItemCard";
 import { authClient } from "@/lib/auth-client";
@@ -37,22 +37,14 @@ const AllInterviews = () => {
   const [loading, setLoading] = useState(true);
   const [filterDate, setFilterDate] = useState("");
 
-  useEffect(() => {
-    if (session?.user?.email) {
-      getInterviewList();
-    } else if (!isSessionLoading && !session) {
-      setLoading(false);
-    }
-  }, [session, isSessionLoading]);
 
-  const getInterviewList = async () => {
+  const getInterviewList = useCallback(async () => {
     setLoading(true);
     const email = session?.user?.email;
 
     if (email) {
       const result = await getInterviews(email);
 
-      // Normalize dates to ensure InterviewItemCard receives Date objects
       const normalized = result.map((i: any) => ({
         ...i,
         createdAt: new Date(i.createdAt),
@@ -63,7 +55,16 @@ const AllInterviews = () => {
     }
 
     setLoading(false);
-  };
+  }, [session?.user?.email]);
+
+  useEffect(() => {
+    if (session?.user?.email) {
+      getInterviewList();
+    } else if (!isSessionLoading && !session) {
+      setLoading(false);
+    }
+  }, [session, isSessionLoading, getInterviewList]);
+
 
   // Filter Logic
   const filteredInterviews = interviewList.filter((interview) => {

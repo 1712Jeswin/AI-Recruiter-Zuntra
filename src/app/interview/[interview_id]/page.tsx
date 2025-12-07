@@ -1,26 +1,25 @@
 "use client";
 
-import { Building2, Clock, Info, Ban } from "lucide-react";
+import { Building2, Clock, Info, Ban, Briefcase, CheckCircle2 } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { CheckCircle2, Briefcase } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 // ------------------------
 // EXECUTIVE LOADER
 // ------------------------
+const steps = [
+  "Establishing secure connection...",
+  "Verifying interview session...",
+  "Loading job information...",
+  "Preparing interview room...",
+];
+
 const ExecutiveLoader = () => {
   const [progress, setProgress] = useState(0);
   const [step, setStep] = useState(0);
-
-  const steps = [
-    "Establishing secure connection...",
-    "Verifying interview session...",
-    "Loading job information...",
-    "Preparing interview room...",
-  ];
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -105,10 +104,10 @@ export default function InterviewUI() {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
 
-  const [step, setStep] = useState<"info" | "otp" | "instructions">("info");
+  const [step, setStep] = useState<"info" | "otp" | "instructions" | "blocked">("info");
   const [loading, setLoading] = useState(false);
 
-  const [verificationId, setVerificationId] = useState("");
+  const [blockReason, setBlockReason] = useState("");
 
   // ------------------------
   // LOAD INTERVIEW DETAILS
@@ -122,9 +121,6 @@ export default function InterviewUI() {
 
       setData(json);
 
-      // ------------------------
-      // EXPIRY CHECK
-      // ------------------------
       const now = new Date();
       const expiry = json.expiresAt ? new Date(json.expiresAt) : null;
 
@@ -158,12 +154,11 @@ export default function InterviewUI() {
 
     if (!json.success) return alert(json.error);
 
-    setVerificationId(json.verificationId);
     setStep("otp");
   }
 
   // ------------------------
-  // STEP 2 – Verify OTP
+  // STEP 2 – Verify OTP (UPDATED)
   // ------------------------
   async function verifyOtp() {
     if (otp.length !== 6) {
@@ -188,14 +183,53 @@ export default function InterviewUI() {
     setLoading(false);
 
     if (!json.success) {
-      alert(json.error);
+      alert(json.error || "Verification failed");
       return;
     }
 
-    localStorage.setItem("candidateId", json.candidateId);
+    const { candidateId, allowed, reason } = json;
 
+    localStorage.setItem("candidateId", candidateId);
+
+    // ❌ Not allowed → show blocked UI
+    if (!allowed) {
+      setBlockReason(reason);
+      setStep("blocked");
+      return;
+    }
+
+    // -------------------------------
+    // REDIRECT LOGIC
+    // -------------------------------
+
+    // 1️⃣ Slot already booked → go to scheduled interview
+    if (reason === "candidate_has_confirmed_booking") {
+      router.push(`/interview/${interview_id}/scheduled`);
+      return;
+    }
+
+    // 2️⃣ Interview already started and pending → continue session
+    if (reason === "pending_session") {
+      router.push(`/interview/${interview_id}/session`);
+      return;
+    }
+
+    // 3️⃣ Resume already parsed + ATS score good → go to slot booking
+    if (reason === "ats_score_higher_than_resume") {
+      router.push(`/interview/${interview_id}/slot`);
+      return;
+    }
+
+    // 4️⃣ Resume not uploaded → continue to resume instructions
+    if (reason === "resume_not_uploaded_yet") {
+      setStep("instructions");
+      return;
+    }
+
+    // fallback
     setStep("instructions");
   }
+
 
   // ------------------------
   // SHOW LOADER IF NOT READY
@@ -208,41 +242,35 @@ export default function InterviewUI() {
     );
 
   // ------------------------
-// EXPIRED INTERVIEW UI
-// ------------------------
-if (expired) {
-  return (
-    <div className="h-screen flex justify-center items-center bg-gray-100 p-6">
-      <div className="max-w-lg bg-white p-8 rounded-2xl shadow-lg border text-center animate-fade-in">
-        <div className="flex flex-col items-center gap-4">
-          <div className="bg-red-100 p-4 rounded-full">
-            <Ban className="w-10 h-10 text-red-600" />
-          </div>
+  // EXPIRED INTERVIEW UI
+  // ------------------------
+  if (expired) {
+    return (
+      <div className="h-screen flex justify-center items-center bg-gray-100 p-6">
+        <div className="max-w-lg bg-white p-8 rounded-2xl shadow-lg border text-center animate-fade-in">
+          <div className="flex flex-col items-center gap-4">
+            <div className="bg-red-100 p-4 rounded-full">
+              <Ban className="w-10 h-10 text-red-600" />
+            </div>
 
-          <h2 className="text-2xl font-semibold text-gray-900">
-            Recruitment Closed
-          </h2>
+            <h2 className="text-2xl font-semibold text-gray-900">
+              Recruitment Closed
+            </h2>
 
-          <p className="text-gray-600 text-sm leading-relaxed">
-            The interview session for
-            <br />
-            <b className="text-gray-800">{data.jobPosition}</b>  
-            is no longer accepting candidates.
-            <br />
-            We appreciate your interest.
-          </p>
-
-          <div className="mt-4 text-gray-700 text-sm">
-            <p>Please check back later for new opportunities.</p>
+            <p className="text-gray-600 text-sm leading-relaxed">
+              The interview session for
+              <br />
+              <b className="text-gray-800">{data.jobPosition}</b>
+              is no longer accepting candidates.
+            </p>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   // ------------------------
-  // NORMAL INTERVIEW FLOW
+  // MAIN UI
   // ------------------------
   return (
     <div className="h-screen flex justify-center items-center bg-gray-100 p-4 overflow-hidden animate-fade-in">
@@ -352,7 +380,50 @@ if (expired) {
             </>
           )}
 
-          {/* STEP 3 — INSTRUCTIONS */}
+          {/* STEP 3 — BLOCKED VIEW */}
+          {step === "blocked" && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-5 mt-6 text-center">
+              <Ban className="w-10 h-10 text-red-600 mx-auto" />
+
+              <h3 className="text-xl font-semibold text-red-700 mt-3">
+                Access Denied
+              </h3>
+
+              {blockReason === "interview_already_completed" && (
+                <p className="text-gray-700 mt-2">
+                  You have already completed this interview session.
+                </p>
+              )}
+
+              {blockReason === "ats_not_higher_than_resume" && (
+                <p className="text-gray-700 mt-2">
+                  Your ATS score was too low to continue with the interview.
+                </p>
+              )}
+
+
+              {blockReason === "not_eligible_no_booking_low_ats" && (
+                <p className="text-gray-700 mt-2">
+                  You are not eligible to continue at this time.
+                </p>
+              )}
+
+              {blockReason === "candidate_disqualified" && (
+                <p className="text-gray-700 mt-2">
+                  You cannot continue with this interview.
+                </p>
+              )}
+
+              <button
+                onClick={() => router.push("/")}
+                className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg"
+              >
+                Go Back
+              </button>
+            </div>
+          )}
+
+          {/* STEP 4 — INSTRUCTIONS */}
           {step === "instructions" && (
             <>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-5 text-left text-sm">
@@ -377,6 +448,7 @@ if (expired) {
               </button>
             </>
           )}
+
         </div>
       </div>
     </div>

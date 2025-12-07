@@ -7,7 +7,6 @@ import {
   timestamp,
   jsonb,
   unique,
-  foreignKey,
 } from "drizzle-orm/pg-core";
 
 export const userRole = pgEnum("user_role", ["admin", "client"]);
@@ -228,8 +227,8 @@ export const booking = pgTable("booking", {
 
   status: text("status").notNull(),  // confirmed | cancelled
 
-   start: text("start").notNull(),
-  end: text("end"),
+    start: timestamp("start", { withTimezone: true }).notNull(),
+  end: timestamp("end", { withTimezone: true }),
 
 
   meetingLink: text("meeting_link"),
@@ -265,6 +264,12 @@ export const bookingHold = pgTable("booking_hold", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const interviewStatus = pgEnum("interview_status", [
+  "pending",
+  "completed",
+  
+]);
+
 export const interviewSession = pgTable("interview_session", {
   id: text("id").primaryKey(),
 
@@ -278,6 +283,9 @@ export const interviewSession = pgTable("interview_session", {
 
   // All question + answer pairs
   answers: jsonb("answers").notNull(),
+  unblurCount: integer("unblur_count").notNull().default(0),
+
+  status: interviewStatus("status").notNull().default("pending"),
 
   // Full structured evaluation JSON
   evaluation: jsonb("evaluation"),

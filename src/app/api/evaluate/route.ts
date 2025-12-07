@@ -13,15 +13,15 @@ function cleanJSON(raw: string) {
   return raw
     .replace(/```json/gi, "")
     .replace(/```/g, "")
-    .replace(/^[^{]*({[\s\S]*})[^}]*$/m, "$1") // extract ONLY inside first { }
-    .replace(/\n/g, " ")                      // remove newlines
+    .replace(/^[^{]*({[\s\S]*})[^}]*$/m, "$1")
+    .replace(/\n/g, " ")
     .replace(/\r/g, " ")
     .trim();
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { candidateId, answers } = await req.json();
+    const { candidateId, answers, unblurCount } = await req.json();
 
     if (!candidateId || !answers) {
       return NextResponse.json(
@@ -30,19 +30,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Construct prompt
+    // Construct prompt INCLUDING UNBLUR COUNT
     const prompt = `
-You are an advanced AI interview evaluator. Analyze the candidate’s performance based on the answers provided.
+You are an advanced AI interview evaluator. Analyze the candidate’s performance based on the voice answers.
+
+IMPORTANT:
+The candidate unblurred the question **${unblurCount} times**.
+Unblurring means the candidate relied on reading instead of listening.
+This should directly reduce their **listening skill score** and influence the communication evaluation.
 
 Your job is to produce a deep, structured evaluation that captures:
 - Communication ability
+- **Listening skill penalty based on unblurCount**
 - Clarity of thought
 - Technical and analytical skill
 - Professionalism
 - Overall interview readiness
 
+RULE FOR LISTENING SKILLS:
+
+- If unblurCount = 0 → no penalty  
+- If unblurCount = 1 → mild penalty  
+- If unblurCount 2–3 → noticeable penalty  
+- If unblurCount ≥ 4 → strong penalty, explicitly mention it in feedback  
+- Incorporate this penalty into:
+  - communication score  
+  - professionalism feedback  
+  - summary  
+  - final verdict if necessary  
+
 IMPORTANT — Return STRICT JSON ONLY.
-No markdown, no commentary, no backticks.
 
 FINAL JSON FORMAT:
 {
@@ -71,42 +88,14 @@ FINAL JSON FORMAT:
     "responsesReceived": number,
     "silenceAutoSubmits": number,
     "manualSkips": number,
+    "unblurCount": number,
     "interviewDate": string
   }
 }
 
-EVALUATION RULES:
-
-1. **combinedAnswerInsights**
-   - Instead of scoring each question individually, analyze all answers together.
-   - Extract patterns such as:
-     - recurring strengths
-     - repeating weaknesses
-     - mindset indicators
-     - depth of thinking
-     - communication style trends
-     - technical or conceptual patterns
-
-2. **breakdown section**
-   - Provide a genuine, multi-sentence evaluation for each category.
-   - Feedback should feel like a human interviewer's detailed notes.
-
-3. **verdict rules**
-   - "Strongly Recommended" → overallScore ≥ 85
-   - "Recommended" → overallScore ≥ 70
-   - "Neutral" → 50–69
-   - "Not Recommended" → < 50
-   - isRecommended = true only for the first two levels.
-
-4. **summary**
-   - A holistic narrative of the candidate’s performance.
-   - Should read like a polished evaluator’s summary.
-
 Candidate Answers:
 ${JSON.stringify(answers, null, 2)}
 `;
-
-
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     const result = await model.generateContent(prompt);
@@ -120,19 +109,24 @@ ${JSON.stringify(answers, null, 2)}
       parsed = JSON.parse(cleaned);
     } catch (e) {
       console.error("JSON parse error:", text);
-      
+
       parsed = {
         summary: "Evaluation failed, fallback applied.",
         verdict: "Needs Improvement",
         overallScore: 50,
+        metadata: { unblurCount }
       };
     }
 
     // Save to database
     await db
       .update(interviewSession)
-      .set({ evaluation: parsed })
+      .set({
+        evaluation: parsed,
+        status: "completed"   // ← Mark interview as completed
+      })
       .where(eq(interviewSession.candidateId, candidateId));
+
 
     return NextResponse.json({ success: true });
   } catch (err) {

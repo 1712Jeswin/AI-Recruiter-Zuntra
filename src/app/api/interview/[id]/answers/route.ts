@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { interviewSession } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 
 export const runtime = "nodejs";
@@ -12,11 +12,13 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 👉 FIX: await params
+    // Required for Next 15+
     const { id } = await context.params;
 
     const interviewId = id;
-    const { candidateId, answers } = await req.json();
+
+    // ⭐ NOW we also read unblurCount
+    const { candidateId, answers, unblurCount } = await req.json();
 
     if (!interviewId || !candidateId || !Array.isArray(answers)) {
       return NextResponse.json(
@@ -25,23 +27,33 @@ export async function POST(
       );
     }
 
-    // Check existing record
+    // Check existing session
     const existing = await db
-      .select()
-      .from(interviewSession)
-      .where(eq(interviewSession.candidateId, candidateId));
+         .select()
+         .from(interviewSession)
+         .where(
+           and(
+             eq(interviewSession.interviewId, interviewId),
+             eq(interviewSession.candidateId, candidateId)
+           )
+         );
 
     let saved;
 
     if (existing.length > 0) {
-      // Update
+      const prev = existing[0];
+
+      // ⭐ Update: Save unblurCount safely
       saved = await db
         .update(interviewSession)
-        .set({ answers })
+        .set({
+          answers,
+          unblurCount: unblurCount ?? prev.unblurCount ?? 0,
+        })
         .where(eq(interviewSession.candidateId, candidateId))
         .returning();
     } else {
-      // Insert
+      // ⭐ Insert new record with unblurCount
       saved = await db
         .insert(interviewSession)
         .values({
@@ -49,6 +61,7 @@ export async function POST(
           interviewId,
           candidateId,
           answers,
+          unblurCount: unblurCount ?? 0,
         })
         .returning();
     }

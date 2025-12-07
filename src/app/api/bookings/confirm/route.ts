@@ -16,26 +16,26 @@ export async function POST(req: Request) {
     }
 
     // --------------------------------------------------
-    // Load hold
+    // Load Hold
     // --------------------------------------------------
     const hold = (
       await db.select().from(bookingHold).where(eq(bookingHold.id, holdId))
     )[0];
 
-    if (!hold)
+    if (!hold) {
       return NextResponse.json({ error: "hold_not_found" }, { status: 404 });
+    }
 
-    if (hold.candidateId !== candidateId)
+    if (hold.candidateId !== candidateId) {
       return NextResponse.json({ error: "not_owner" }, { status: 403 });
+    }
 
-    if (new Date(hold.expiresAt) < new Date())
+    if (new Date(hold.expiresAt) < new Date()) {
       return NextResponse.json({ error: "hold_expired" }, { status: 410 });
+    }
 
     // --------------------------------------------------
-    // Load slotRecord to extract start/end from JSON array
-    // --------------------------------------------------
-    // --------------------------------------------------
-    // Load slotRecord to extract start/end from JSON array
+    // Load Slot Record
     // --------------------------------------------------
     const slotRecord = (
       await db
@@ -44,13 +44,14 @@ export async function POST(req: Request) {
         .where(eq(interviewSlot.id, hold.slotId))
     )[0];
 
-    if (!slotRecord)
+    if (!slotRecord) {
       return NextResponse.json(
         { error: "slot_record_not_found" },
         { status: 404 }
       );
+    }
 
-    // ⭐ FIX: Ensure slots is always an array
+    // Ensure slots array exists
     const slots: Array<{ start: string; end: string }> = Array.isArray(
       slotRecord.slots
     )
@@ -65,35 +66,51 @@ export async function POST(req: Request) {
     }
 
     const selectedSlot = slots[hold.slotIndex];
-    const { start, end } = selectedSlot;
+    let { start, end } = selectedSlot;
 
     // --------------------------------------------------
-    // Complete booking
+    // Convert to real Date objects (IMPORTANT FIX)
+    // --------------------------------------------------
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return NextResponse.json(
+        { error: "invalid_date_format", providedStart: start, providedEnd: end },
+        { status: 400 }
+      );
+    }
+
+    // --------------------------------------------------
+    // Insert Booking
     // --------------------------------------------------
     const bookingId = uuid();
 
     await db.insert(booking).values({
       id: bookingId,
       interviewId: hold.interviewId,
-      candidateId,
+      candidateId: hold.candidateId,
       slotId: hold.slotId,
       slotIndex: hold.slotIndex,
-      start,
-      end,
+      start: startDate,   // stored as timestamp with timezone
+      end: endDate,       // stored as timestamp with timezone
       status: "confirmed",
     });
 
     // --------------------------------------------------
-    // Remove hold
+    // Delete Hold
     // --------------------------------------------------
     await db.delete(bookingHold).where(eq(bookingHold.id, holdId));
 
+    // --------------------------------------------------
+    // Return normalized ISO times (frontend will parse correctly)
+    // --------------------------------------------------
     return NextResponse.json({
       bookingId,
       slotId: hold.slotId,
       slotIndex: hold.slotIndex,
-      start: new Date(start).toISOString(),
-      end: new Date(end).toISOString(),
+      start: startDate.toISOString(),
+      end: endDate.toISOString(),
     });
   } catch (err) {
     console.error("CONFIRM ERROR:", err);

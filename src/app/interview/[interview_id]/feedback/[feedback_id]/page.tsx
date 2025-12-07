@@ -199,10 +199,9 @@ function TechLoader({ active }: any) {
             <div key={index} className="flex items-center gap-4 transition-all">
               <div
                 className={`w-10 h-10 rounded-lg flex items-center justify-center 
-                  ${
-                    isComplete
-                      ? "bg-emerald-50 text-emerald-600"
-                      : isCurrent
+                  ${isComplete
+                    ? "bg-emerald-50 text-emerald-600"
+                    : isCurrent
                       ? "bg-indigo-50 text-indigo-600 scale-110"
                       : "bg-slate-50 text-slate-300"
                   }`}
@@ -210,9 +209,8 @@ function TechLoader({ active }: any) {
                 {isComplete ? <CheckCircle2 size={18} /> : <Icon size={18} />}
               </div>
               <span
-                className={`text-sm font-mono ${
-                  isCurrent ? "text-slate-800 font-bold" : "text-slate-500"
-                }`}
+                className={`text-sm font-mono ${isCurrent ? "text-slate-800 font-bold" : "text-slate-500"
+                  }`}
               >
                 {item.text}
               </span>
@@ -383,28 +381,27 @@ export default function FeedbackPage() {
               )}
             </div>
 
-          <button
-  disabled={!didPass}
-  onClick={() => router.push(`/interview/${interview_id}/slot`)}
-  className={`
+            <button
+              disabled={!didPass}
+              onClick={() => router.push(`/interview/${interview_id}/slot`)}
+              className={`
     w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2
     transition-all duration-200
 
-    ${
-      didPass
-        ? `
+    ${didPass
+                  ? `
           bg-blue-600 text-white border border-blue-600
           hover:bg-blue-700 hover:border-blue-700
         `
-        : `
+                  : `
           bg-white text-blue-400 border border-blue-300
           cursor-not-allowed
         `
-    }
+                }
   `}
->
-  Start Interview <ChevronRight size={16} />
-</button>
+            >
+              Start Interview <ChevronRight size={16} />
+            </button>
 
 
           </Card>
@@ -475,12 +472,11 @@ export default function FeedbackPage() {
 
                   <div className="text-right">
                     <span
-                     className={`text-4xl font-bold ${
-                     ats >= cutoff ? "text-emerald-600" : "text-red-500"
-                    }`}
-                     >
-                   {ats}%
-                  </span>
+                      className={`text-4xl font-bold ${ats >= cutoff ? "text-emerald-600" : "text-red-500"
+                        }`}
+                    >
+                      {ats}%
+                    </span>
                     <p className="text-xs text-slate-500">Cutoff: {cutoff}%</p>
                   </div>
                 </div>
@@ -492,11 +488,11 @@ export default function FeedbackPage() {
                 <div className="flex flex-wrap gap-2">
                   {(report.ats?.recommendedKeywords || []).map((k: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined, i: React.Key | null | undefined) => (
                     <span
-                   key={i}
-                  className="px-3 py-1.5 bg-slate-100 rounded-full text-sm text-slate-700 border border-slate-300"
-                  >
-                 {k}
-                </span>
+                      key={i}
+                      className="px-3 py-1.5 bg-slate-100 rounded-full text-sm text-slate-700 border border-slate-300"
+                    >
+                      {k}
+                    </span>
 
                   ))}
                 </div>

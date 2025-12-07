@@ -14,11 +14,7 @@ import {
 } from "lucide-react";
 
 // --------------------------------------
-// EXECUTIVE LOADER
-// --------------------------------------
-const ExecutiveLoader = () => {
-  const [progress, setProgress] = useState(0);
-  const [step, setStep] = useState(0);
+// EXECUTIVE LOADER — unchanged
 
   const steps = [
     "Checking your session...",
@@ -26,6 +22,12 @@ const ExecutiveLoader = () => {
     "Syncing your calendar...",
     "Preparing interview portal...",
   ];
+
+const ExecutiveLoader = () => {
+  const [progress, setProgress] = useState(0);
+  const [step, setStep] = useState(0);
+
+
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -93,10 +95,9 @@ const ExecutiveLoader = () => {
 
 // --------------------------------------
 // MAIN PAGE
-// --------------------------------------
 interface Booking {
-  start: string;
-  end?: string;
+  start: string | Date;
+  end?: string | Date;
   meetingLink?: string;
   [key: string]: any;
 }
@@ -114,48 +115,59 @@ export default function ScheduledPage() {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   // --------------------------------------
-  // FETCH BOOKING FROM BACKEND
+  // FETCH BOOKING
   // --------------------------------------
   useEffect(() => {
     async function loadBooking() {
-      const res = await fetch(
-        `/api/bookings/get-time?interview_id=${interview_id}`
-      );
-      const data = await res.json();
+      try {
+        const res = await fetch(
+          `/api/bookings/get-time?interview_id=${interview_id}`
+        );
 
-      if (data?.start) {
+        const data = await res.json();
+
+        // ⭐ FIX: Normalize start/end always to string
+        if (data.start instanceof Date) data.start = data.start.toISOString();
+        if (data.end instanceof Date) data.end = data.end.toISOString();
+
         setBooking(data);
+      } catch (err) {
+        console.error("Error fetching booking:", err);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     }
 
     loadBooking();
   }, [interview_id]);
 
   // --------------------------------------
-  // COUNTDOWN EFFECT
+  // COUNTDOWN EFFECT (safe + correct)
   // --------------------------------------
   useEffect(() => {
     if (!booking?.start) return;
 
-    const startTime = new Date(booking.start).getTime();
+    // Ensure consistent parsing
+    const startStr = typeof booking.start === "string" ? booking.start : booking.start.toISOString();
+    const start = new Date(startStr);
 
-    if (isNaN(startTime)) {
-      console.error("Invalid start time:", booking.start);
+    if (isNaN(start.getTime())) {
+      console.error("Invalid date received:", booking.start);
       return;
     }
 
-    const update = () => {
+    const startTime = start.getTime();
+
+    const tick = () => {
       const diff = Math.floor((startTime - Date.now()) / 1000);
-      setTimeLeft(diff <= 0 ? 0 : diff);
+      setTimeLeft(diff > 0 ? diff : 0);
     };
 
-    update(); // run immediately once
+    tick();
+    const interval = setInterval(tick, 1000);
 
-    const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [booking]);
+  }, [booking?.start]);
 
   const formatCountdown = (seconds: number) => {
     if (seconds <= 0) return "Starting now";
@@ -166,7 +178,7 @@ export default function ScheduledPage() {
   };
 
   // --------------------------------------
-  // SHOW EXECUTIVE LOADER UNTIL BOOKING LOADED
+  // LOADER
   // --------------------------------------
   if (loading || !booking) {
     return (
@@ -184,8 +196,13 @@ export default function ScheduledPage() {
   // --------------------------------------
   // SUCCESS PAGE
   // --------------------------------------
-  const startDate = new Date(booking.start);
-  const endDate = booking.end ? new Date(booking.end) : null;
+  const startDate = new Date(
+    typeof booking.start === "string" ? booking.start : booking.start.toISOString()
+  );
+
+  const endDate = booking.end
+    ? new Date(typeof booking.end === "string" ? booking.end : booking.end.toISOString())
+    : null;
 
   const dateStr = startDate.toLocaleDateString("en-US", {
     weekday: "long",
@@ -226,9 +243,7 @@ export default function ScheduledPage() {
             <div className="mx-auto w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 ring-8 ring-green-50 shadow-sm">
               <CheckCircle2 className="w-8 h-8" strokeWidth={3} />
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold">
-              Interview Scheduled!
-            </h1>
+            <h1 className="text-xl sm:text-2xl font-bold">Interview Scheduled!</h1>
             <p className="text-slate-500 text-base sm:text-lg mt-2 max-w-md mx-auto">
               You're all set. We've reserved your interview slot successfully.
             </p>
@@ -305,15 +320,15 @@ export default function ScheduledPage() {
               onClick={() =>
                 timeLeft !== null &&
                 timeLeft <= 0 &&
-                router.push(`interview/${interview_id}/start-interview`)
+                router.push(`interview/${interview_id}/start`)
               }
               className={`w-full text-lg font-semibold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 transition-all
-    ${
-      timeLeft !== null && timeLeft <= 0
-        ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:-translate-y-0.5"
-        : "bg-slate-300 text-slate-500 cursor-not-allowed"
-    }
-  `}
+                ${
+                  timeLeft !== null && timeLeft <= 0
+                    ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:-translate-y-0.5"
+                    : "bg-slate-300 text-slate-500 cursor-not-allowed"
+                }
+              `}
             >
               {timeLeft === null
                 ? "Loading..."

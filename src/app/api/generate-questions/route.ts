@@ -8,7 +8,7 @@ import mammoth from "mammoth";
  *  - GOOGLE_APPLICATION_CREDENTIALS (absolute path to service account JSON)
  */
 
-const pdf = require("pdf-parse");
+// const pdf = require("pdf-parse");
 
 // ---------- ENV VALIDATION ----------
 if (!process.env.GCP_PROJECT_ID) {

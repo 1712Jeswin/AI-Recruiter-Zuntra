@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Calendar,
   Clock,
@@ -46,17 +46,17 @@ export default function SlotPicker({
   // --------------------------------------------------------
   // FILTER FUTURE SLOTS
   // --------------------------------------------------------
-const filterFutureSlots = (slots: Slot[]) => {
-  const now = new Date();
+  const filterFutureSlots = (slots: Slot[]) => {
+    const now = new Date();
 
-  return slots.filter((slot) => {
-    const startTime = new Date(slot.start);
-    const cutoff = new Date(startTime.getTime() - 15 * 60 * 1000); // 15-minute before start
+    return slots.filter((slot) => {
+      const startTime = new Date(slot.start);
+      const cutoff = new Date(startTime.getTime() - 15 * 60 * 1000); // 15-minute before start
 
-    // Only show slot if we are BEFORE the cutoff
-    return now < cutoff;
-  });
-};
+      // Only show slot if we are BEFORE the cutoff
+      return now < cutoff;
+    });
+  };
 
 
   // Live auto-refresh every 30 seconds
@@ -70,29 +70,27 @@ const filterFutureSlots = (slots: Slot[]) => {
   // --------------------------------------------------------
   // CHECK EXISTING BOOKING
   // --------------------------------------------------------
-  useEffect(() => {
-    if (!candidateId) return;
-    checkExistingBooking();
-  }, [candidateId]);
 
-  async function checkExistingBooking() {
+
+  const checkExistingBooking = useCallback(async () => {
     try {
       const res = await fetch(
         `/api/bookings/status?interviewId=${interviewId}&candidateId=${candidateId}`
       );
       const json = await res.json();
       if (json.hasBooking) setAlreadyBooked(true);
-    } catch {}
-  }
+    } catch { }
+  }, [interviewId, candidateId]);
+
+  useEffect(() => {
+    if (!candidateId) return;
+    checkExistingBooking();
+  }, [candidateId, checkExistingBooking]);
 
   // --------------------------------------------------------
   // FETCH SLOTS
   // --------------------------------------------------------
-  useEffect(() => {
-    fetchSlots();
-  }, [interviewId]);
-
-  async function fetchSlots() {
+  const fetchSlots = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -104,14 +102,17 @@ const filterFutureSlots = (slots: Slot[]) => {
 
       if (!res.ok) throw new Error(json.error || "Failed to load slots");
 
-      // Filter expired slots
       setSlots(filterFutureSlots(json.slots ?? []));
     } catch (e: any) {
       setError(e.message);
     }
 
     setLoading(false);
-  }
+  }, [interviewId]);
+
+  useEffect(() => {
+    fetchSlots();
+  }, [fetchSlots]);
 
   // --------------------------------------------------------
   // HOLD SLOT
@@ -187,16 +188,13 @@ const filterFutureSlots = (slots: Slot[]) => {
   // --------------------------------------------------------
   // CANCEL HOLD
   // --------------------------------------------------------
-  async function cancelHold(auto = false) {
+  const cancelHold = useCallback(async (auto = false) => {
     if (!hold) return;
 
     const res = await fetch(`/api/bookings/cancel`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        holdId: hold.holdId,
-        candidateId,
-      }),
+      body: JSON.stringify({ holdId: hold.holdId, candidateId }),
     });
 
     const json = await res.json();
@@ -206,12 +204,11 @@ const filterFutureSlots = (slots: Slot[]) => {
       setSelected(null);
       setTimeLeft(null);
       fetchSlots();
-
       if (auto) setError("Your held slot expired and was released.");
     } else {
       setError(json.error || "Cancel failed");
     }
-  }
+  }, [hold, candidateId, fetchSlots]);
 
   // --------------------------------------------------------
   // AUTO TIMER
@@ -229,7 +226,7 @@ const filterFutureSlots = (slots: Slot[]) => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [hold, timeLeft]);
+  }, [hold, timeLeft, cancelHold]);
 
   // Helpers
   const formatTimer = (seconds: number | null) => {
@@ -360,10 +357,9 @@ const filterFutureSlots = (slots: Slot[]) => {
                         key={`${slot.slotRecordId}-${slot.slotIndex}`}
                         onClick={() => !hold && setSelected(slot)}
                         className={`group relative flex flex-col p-5 rounded-xl border-2 transition-all cursor-pointer
-                          ${
-                            isSelected
-                              ? "border-blue-600 bg-blue-50/40 ring-4 ring-blue-50 shadow-md"
-                              : "border-slate-200 hover:border-blue-300 bg-white"
+                          ${isSelected
+                            ? "border-blue-600 bg-blue-50/40 ring-4 ring-blue-50 shadow-md"
+                            : "border-slate-200 hover:border-blue-300 bg-white"
                           }
                           ${hold && !isSelected ? "opacity-40 grayscale cursor-not-allowed" : ""}
                         `}
@@ -381,9 +377,8 @@ const filterFutureSlots = (slots: Slot[]) => {
 
                         {/* DATE */}
                         <span
-                          className={`text-xs font-bold uppercase tracking-wide mb-1 ${
-                            isSelected ? "text-blue-600" : "text-slate-400"
-                          }`}
+                          className={`text-xs font-bold uppercase tracking-wide mb-1 ${isSelected ? "text-blue-600" : "text-slate-400"
+                            }`}
                         >
                           {formatDate(slot.start).day},{" "}
                           {formatDate(slot.start).date}
@@ -391,9 +386,8 @@ const filterFutureSlots = (slots: Slot[]) => {
 
                         {/* TIME */}
                         <div
-                          className={`text-xl font-semibold mb-3 ${
-                            isSelected ? "text-slate-900" : "text-slate-700"
-                          }`}
+                          className={`text-xl font-semibold mb-3 ${isSelected ? "text-slate-900" : "text-slate-700"
+                            }`}
                         >
                           {formatTimeRange(slot.start, slot.end)}
                         </div>
@@ -470,11 +464,10 @@ const filterFutureSlots = (slots: Slot[]) => {
 
         {/* footer */}
         <div
-          className={`p-6 border-t text-center text-sm ${
-            alreadyBooked
-              ? "bg-red-50 border-red-200 text-red-600"
-              : "bg-slate-50 border-slate-200 text-slate-500"
-          }`}
+          className={`p-6 border-t text-center text-sm ${alreadyBooked
+            ? "bg-red-50 border-red-200 text-red-600"
+            : "bg-slate-50 border-slate-200 text-slate-500"
+            }`}
         >
           {alreadyBooked
             ? "You already booked, you cannot book another slot."

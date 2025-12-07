@@ -2,7 +2,6 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import {
-  Calendar,
   Users,
   Info,
   ArrowLeft,

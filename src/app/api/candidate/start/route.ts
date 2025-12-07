@@ -18,36 +18,45 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1️⃣ Check duplicate candidate
-    const exists = await db
+    // Normalize inputs
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedInterviewId = String(interviewId).trim();
+
+    // -----------------------------
+    // 1️⃣ Check if candidate ALREADY EXISTS
+    // -----------------------------
+    // ❗ Do NOT block – allow login flow to proceed
+    const existingCandidate = await db
       .select()
       .from(candidate)
       .where(
-        and(eq(candidate.email, email), eq(candidate.interviewId, interviewId))
+        and(
+          eq(candidate.email, normalizedEmail),
+          eq(candidate.interviewId, normalizedInterviewId)
+        )
       );
 
-    if (exists.length > 0) {
-      return NextResponse.json(
-        {
-          error:
-            "This email is already registered for this interview. Try logging in or use a different email.",
-        },
-        { status: 409 }
-      );
+    // Optional: You can auto-fill fullName from DB if needed
+    if (existingCandidate.length > 0) {
+      console.log("Candidate exists → login mode");
     }
 
-    // 2️⃣ Generate OTP (6 digits)
+    // -----------------------------
+    // 2️⃣ Generate OTP
+    // -----------------------------
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     const id = randomUUID();
 
-    // 3️⃣ Insert or update OTP in the email_verification table
+    // -----------------------------
+    // 3️⃣ Insert or update OTP record
+    // -----------------------------
     await db
       .insert(emailVerification)
       .values({
         id,
-        email,
-        interviewId,
+        email: normalizedEmail,
+        interviewId: normalizedInterviewId,
         otp,
         expiresAt,
         verified: false,
@@ -61,17 +70,15 @@ export async function POST(req: Request) {
         },
       });
 
-    // 4️⃣ Send OTP email via Brevo
+    // -----------------------------
+    // 4️⃣ Send OTP Email
+    // -----------------------------
     try {
-      await sendOtpEmail(email, otp);
+      await sendOtpEmail(normalizedEmail, otp);
     } catch (err) {
-      console.error("Brevo Email Sending Failed:", err);
-
+      console.error("Email Sending Failed:", err);
       return NextResponse.json(
-        {
-          error:
-            "Failed to send OTP email. Check your email settings or try again.",
-        },
+        { error: "Failed to send OTP email. Try again." },
         { status: 500 }
       );
     }
@@ -79,13 +86,14 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       verificationId: id,
-      message: "OTP has been sent to your email address.",
+      message: "OTP sent successfully.",
     });
+
   } catch (err) {
     console.error("Start Verification Error:", err);
 
     return NextResponse.json(
-      { error: "Failed to start email verification. Try again later." },
+      { error: "Failed to start email verification." },
       { status: 500 }
     );
   }

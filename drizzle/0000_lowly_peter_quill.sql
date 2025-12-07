@@ -96,6 +96,7 @@ CREATE TABLE "interview_session" (
 	"candidate_id" text NOT NULL,
 	"interview_id" text NOT NULL,
 	"answers" jsonb NOT NULL,
+	"unblur_count" integer DEFAULT 0 NOT NULL,
 	"evaluation" jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
