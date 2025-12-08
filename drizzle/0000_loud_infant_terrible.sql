@@ -1,3 +1,4 @@
+CREATE TYPE "public"."interview_status" AS ENUM('pending', 'completed');--> statement-breakpoint
 CREATE TYPE "public"."user_role" AS ENUM('admin', 'client');--> statement-breakpoint
 CREATE TABLE "account" (
 	"id" text PRIMARY KEY NOT NULL,
@@ -22,8 +23,8 @@ CREATE TABLE "booking" (
 	"slot_id" text NOT NULL,
 	"slot_index" integer NOT NULL,
 	"status" text NOT NULL,
-	"start" text NOT NULL,
-	"end" text,
+	"start" timestamp with time zone NOT NULL,
+	"end" timestamp with time zone,
 	"meeting_link" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
@@ -97,6 +98,7 @@ CREATE TABLE "interview_session" (
 	"interview_id" text NOT NULL,
 	"answers" jsonb NOT NULL,
 	"unblur_count" integer DEFAULT 0 NOT NULL,
+	"status" "interview_status" DEFAULT 'pending' NOT NULL,
 	"evaluation" jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );

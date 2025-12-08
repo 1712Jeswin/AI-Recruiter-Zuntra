@@ -74,7 +74,6 @@
 
 import { redirect } from "next/navigation";
 import InterviewClientWrapper from "./InterviewClientWrapper";
-
 // interface StartPageProps {
 //   params: { interview_id: string };
 //   searchParams?: {
@@ -132,5 +131,4 @@ export default async function StartPage({
     <InterviewClientWrapper interviewId={interview_id} candidateId={candidateId} />
   );
 }
-
 

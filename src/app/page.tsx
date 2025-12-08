@@ -7,7 +7,6 @@ import Link from "next/link"; // Use Link for client-side routing
 import {
   BrainCircuit,
   ArrowRight,
-  PlayCircle,
   LayoutDashboard,
   Users,
   MessageSquare,
@@ -18,8 +17,7 @@ import {
   UploadCloud,
   ScanSearch,
   CheckCircle2,
-  Star,
-  Check
+  Star
 } from "lucide-react";
 
 // 1. Convert to an 'async' function to make it a Next.js Server Component
@@ -61,12 +59,7 @@ const LandingPage = async () => {
               >
                 How it Works
               </a>
-              <a
-                href="#pricing"
-                className="text-slate-600 hover:text-blue-600 font-medium transition"
-              >
-                Pricing
-              </a>
+              
             </div>
             <div className="flex space-x-4 items-center">
               {/* Login Button - Changed <a> to <Link> */}
@@ -116,9 +109,6 @@ const LandingPage = async () => {
                     Get Started Free <ArrowRight className="w-5 h-5" />
                   </button>
                 </Link>
-                <button className="w-full sm:w-auto bg-white border-2 border-slate-200 hover:border-blue-200 hover:bg-blue-50 text-slate-700 hover:text-blue-700 px-8 py-3.5 rounded-xl font-semibold text-lg transition flex items-center justify-center gap-2">
-                  <PlayCircle className="w-5 h-5" /> Try Demo
-                </button>
               </div>
               <div className="mt-8 flex items-center gap-4 text-sm text-slate-500">
                 <div className="flex -space-x-2">
@@ -541,122 +531,7 @@ const LandingPage = async () => {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h3 className="text-3xl font-bold text-slate-900">
-              Simple, transparent pricing
-            </h3>
-            <p className="text-slate-500 mt-4">
-              Start for free, upgrade as you grow.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* Free Plan */}
-            <div className="rounded-2xl border border-slate-200 p-8 hover:border-blue-300 transition">
-              <h4 className="text-xl font-bold text-slate-900">Free</h4>
-              <div className="my-4">
-                <span className="text-4xl font-bold text-slate-900">$0</span>
-                <span className="text-slate-500">/mo</span>
-              </div>
-              <p className="text-sm text-slate-500 mb-6">
-                For solo recruiters testing the waters.
-              </p>
-              {/* Button - Changed <a> to <Link> */}
-              <Link href="/login">
-                <button className="w-full mb-6 border border-blue-600 text-blue-600 hover:bg-blue-50 font-medium px-4 py-2 rounded-md transition">
-                  Get Started
-                </button>
-              </Link>
-              <ul className="space-y-3 text-sm text-slate-600">
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> 1 Active Job
-                </li>
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> 10 AI
-                  Interviews/mo
-                </li>
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> Basic Reporting
-                </li>
-              </ul>
-            </div>
-
-            {/* Pro Plan */}
-            <div className="rounded-2xl border-2 border-blue-600 p-8 relative shadow-xl bg-white scale-105 transform z-10">
-              <div className="absolute top-0 right-0 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-bl-xl rounded-tr-lg">
-                POPULAR
-              </div>
-              <h4 className="text-xl font-bold text-slate-900">Pro</h4>
-              <div className="my-4">
-                <span className="text-4xl font-bold text-slate-900">$49</span>
-                <span className="text-slate-500">/mo</span>
-              </div>
-              <p className="text-sm text-slate-500 mb-6">
-                For growing teams hiring regularly.
-              </p>
-              {/* Button - Changed <a> to <Link> */}
-              <Link href="/login">
-                <button className="w-full mb-6 bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20 font-medium px-4 py-2 rounded-md transition">
-                  Try Pro Free
-                </button>
-              </Link>
-              <ul className="space-y-3 text-sm text-slate-600">
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> 5 Active Jobs
-                </li>
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> 100 AI
-                  Interviews/mo
-                </li>
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> Advanced
-                  Analytics
-                </li>
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> Custom Workflows
-                </li>
-              </ul>
-            </div>
-
-            {/* Enterprise Plan */}
-            <div className="rounded-2xl border border-slate-200 p-8 hover:border-blue-300 transition">
-              <h4 className="text-xl font-bold text-slate-900">Enterprise</h4>
-              <div className="my-4">
-                <span className="text-4xl font-bold text-slate-900">
-                  Custom
-                </span>
-              </div>
-              <p className="text-sm text-slate-500 mb-6">
-                For large orgs with high volume.
-              </p>
-              {/* Button - Changed <a> to <Link> */}
-              <Link href="/login">
-                <button className="w-full mb-6 border border-blue-600 text-blue-600 hover:bg-blue-50 font-medium px-4 py-2 rounded-md transition">
-                  Contact Sales
-                </button>
-              </Link>
-              <ul className="space-y-3 text-sm text-slate-600">
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> Unlimited Jobs
-                </li>
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> Unlimited
-                  Interviews
-                </li>
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> ATS Integration
-                </li>
-                <li className="flex gap-2">
-                  <Check className="w-5 h-5 text-blue-600" /> Dedicated
-                  Success Mgr
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+  
 
       {/* CTA */}
       <section className="py-20">

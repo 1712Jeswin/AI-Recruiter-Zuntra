@@ -18,7 +18,7 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").notNull(),
   image: text("image"),
   role: userRole("role").notNull().default("client"),
-  credits: integer("credits").notNull().default(3),
+  credits: integer("credits").notNull().default(100),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
 });
@@ -65,24 +65,23 @@ export const verification = pgTable("verification", {
 
 export const interview = pgTable("interview", {
   id: text("id").primaryKey(),
-  
+
   // Recruiter ID
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  
+
   createdAt: timestamp("created_at").notNull().defaultNow(), // ✅ use defaultNow() for consistency
 
- 
   jobPosition: text("job_position"),
   jobDescription: text("job_description"),
   duration: text("duration"), // Kept as text (varchar equivalent)
   type: text("type").array(),
   experienceLevel: text("experience_level"),
-  
+
   // Stores list of generated questions
   questionList: jsonb("question_list"),
-  
+
   // Resume score as integer
   resumeScore: integer("resume_score"),
 
@@ -92,9 +91,10 @@ export const interview = pgTable("interview", {
   // Slot availability range
   expiresAt: timestamp("expires_at"),
 
-  
   // Reference to candidate email
-  userEmail: text("user_email").references(() => user.email, { onDelete: "cascade" }),
+  userEmail: text("user_email").references(() => user.email, {
+    onDelete: "cascade",
+  }),
 });
 
 export const candidate = pgTable(
@@ -129,11 +129,12 @@ export const emailVerification = pgTable(
     interviewId: text("interview_id")
       .notNull()
       .references(() => interview.id, { onDelete: "cascade" }),
-    
-    candidateId: text("candidate_id")
-    .references(() => candidate.id, { onDelete: "cascade" }),
 
-    // 6-digit OTP 
+    candidateId: text("candidate_id").references(() => candidate.id, {
+      onDelete: "cascade",
+    }),
+
+    // 6-digit OTP
     otp: text("otp").notNull(),
 
     // Expiry time
@@ -151,14 +152,13 @@ export const emailVerification = pgTable(
   })
 );
 
-
 export const feedback = pgTable("feedback", {
   id: text("id").primaryKey(),
-  
+
   candidateId: text("candidate_id")
     .notNull()
     .references(() => candidate.id, { onDelete: "cascade" }),
-    // Just to verify
+  // Just to verify
 
   interviewId: text("interview_id")
     .notNull()
@@ -193,7 +193,6 @@ export const resumeQuestions = pgTable("resume_questions", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-
 // ! Slot Bookibg Table
 
 export const interviewSlot = pgTable("interview_slot", {
@@ -210,7 +209,6 @@ export const interviewSlot = pgTable("interview_slot", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-
 // -------------------------------------------------
 // BOOKING (Confirmed interviews)
 // -------------------------------------------------
@@ -222,21 +220,19 @@ export const booking = pgTable("booking", {
   candidateId: text("candidate_id").notNull(),
 
   // NEW FIELDS:
-  slotId: text("slot_id").notNull(),     // interview_slot.id
-  slotIndex: integer("slot_index").notNull(),  // index in JSON array
+  slotId: text("slot_id").notNull(), // interview_slot.id
+  slotIndex: integer("slot_index").notNull(), // index in JSON array
 
-  status: text("status").notNull(),  // confirmed | cancelled
+  status: text("status").notNull(), // confirmed | cancelled
 
-    start: timestamp("start", { withTimezone: true }).notNull(),
+  start: timestamp("start", { withTimezone: true }).notNull(),
   end: timestamp("end", { withTimezone: true }),
-
 
   meetingLink: text("meeting_link"),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
-
 
 // -------------------------------------------------
 // BOOKING HOLD (5 min temporary reservation)
@@ -267,7 +263,6 @@ export const bookingHold = pgTable("booking_hold", {
 export const interviewStatus = pgEnum("interview_status", [
   "pending",
   "completed",
-  
 ]);
 
 export const interviewSession = pgTable("interview_session", {
@@ -293,8 +288,6 @@ export const interviewSession = pgTable("interview_session", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-
-
 // export const calendarConnection = pgTable("calendar_connection", {
 //   id: text("id").primaryKey(),
 
@@ -314,7 +307,3 @@ export const interviewSession = pgTable("interview_session", {
 
 //   createdAt: timestamp("created_at").notNull().defaultNow(),
 // });
- 
-
-
-

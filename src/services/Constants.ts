@@ -6,9 +6,7 @@ import {
   List,
   Presentation,
   Puzzle,
-  Settings,
   User2Icon,
-  Wallet,
 } from "lucide-react";
 
 export const SidebarOptions = [
@@ -26,16 +24,6 @@ export const SidebarOptions = [
     name: "All Interview",
     icon: List,
     path: "/all-interview",
-  },
-  {
-    name: "Billing",
-    icon: Wallet,
-    path: "/billing",
-  },
-  {
-    name: "Settings",
-    icon: Settings,
-    path: "/settings",
   },
 ];
 

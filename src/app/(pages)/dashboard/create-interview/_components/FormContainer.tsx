@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button";
 import { 
   ArrowRight, X, User, UserCheck, UserStar, 
   Upload, Clock, FileText, Check, Code2, 
-  Briefcase, Brain, Trophy 
+  Briefcase, Brain, Trophy, AlertCircle, Info
 } from "lucide-react";
 import { toast } from "sonner";
 
-// Mocking the constant internally since the external file is not available
+// Constant for interview types
 const InterviewType = [
   { title: 'Technical', icon: Code2 },
   { title: 'Behavioral', icon: User },
@@ -30,7 +30,6 @@ const FormContainer = ({
   GoToNextStep,
 }: FormContainerProps) => {
   
-  // --- EXISTING LOGIC STARTS HERE ---
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>): void => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
@@ -98,7 +97,6 @@ const FormContainer = ({
 
   const clearField = (field: string) => onHandleInputChange(field, null);
 
-  // ✅ Compute whether all required fields are filled
   const isFormValid = useMemo(() => {
     return (
       formData.jobPosition?.trim() &&
@@ -109,66 +107,100 @@ const FormContainer = ({
       formData.interviewType.length > 0
     );
   }, [formData]);
-  // --- EXISTING LOGIC ENDS HERE ---
+
+  const handleDownloadSample = async () => {
+    try {
+      const { Document, Packer, Paragraph } = await import("docx");
+      const saveAs = (await import("file-saver")).default;
+
+      const questions = [
+        "1. Can you briefly introduce yourself and walk me through your professional background?",
+        "2. What are the key strengths you bring to this role, and how have you demonstrated them in past projects?",
+        "3. Describe a challenging situation you faced at work and how you handled it.",
+        "4. Can you explain a project you are most proud of and the impact it created?",
+        "5. How do you approach problem-solving when you encounter an unexpected issue?",
+        "6. Tell me about a time you had to collaborate with a team — what was your role and contribution?",
+        "7. How do you prioritize tasks when managing multiple deadlines?",
+        "8. Describe a situation where you received critical feedback. How did you respond?",
+        "9. What motivates you in a professional environment, and what kind of work culture helps you perform best?",
+        "10. Why are you interested in this position, and how do you see yourself growing in this role?",
+      ];
+
+      const doc = new Document({
+        sections: [{ children: questions.map(q => new Paragraph(q)) }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, "sample-interview-questions.docx");
+      toast.success("Sample questions downloaded.");
+    } catch (error) {
+      console.error("Error generating document:", error);
+      toast.error("Failed to generate sample file.");
+    }
+  };
 
   return (
-    <div className="w-full max-w-3xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden my-6 transition-all duration-300 font-sans text-slate-800">
+    // Updated container width to max-w-6xl for wider screens and added responsive padding
+    <div className="w-full max-w-6xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden my-4 md:my-8 transition-all duration-300 font-sans text-slate-800">
       
       {/* Header */}
-      <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-        <h2 className="text-xl font-bold text-slate-900 tracking-tight">Create Interview Assessment</h2>
-        <p className="text-sm text-slate-500 mt-1">Configure the parameters to generate tailored interview questions.</p>
+      <div className="px-4 py-4 md:px-8 md:py-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Create Interview Assessment</h2>
+          <p className="text-xs md:text-sm text-slate-500 mt-1">Configure the parameters to generate tailored interview questions.</p>
+        </div>
+        <div className="hidden sm:block">
+           <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+             <Briefcase size={20} />
+           </div>
+        </div>
       </div>
 
-      <div className="p-8 space-y-8">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         
         {/* Job Details Section */}
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6">
-            
-            {/* Job Position */}
-            <div className="space-y-2 relative">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
-                <span>Job Position <span className="text-red-500">*</span></span>
-                {formData.jobPosition && (
-                  <button onClick={() => clearField("jobPosition")} className="text-slate-400 hover:text-red-500 text-xs lowercase font-normal flex items-center gap-1">
-                    <X size={12} /> clear
-                  </button>
-                )}
-              </label>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  placeholder="e.g. Senior Full Stack Developer" 
-                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  value={formData.jobPosition || ""}
-                  onChange={(e) => onHandleInputChange("jobPosition", e.target.value.replace(/^\s+/g, ""))}
-                />
-              </div>
-            </div>
-            
-            {/* Job Description */}
-            <div className="space-y-2 relative">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
-                <span>Job Description <span className="text-red-500">*</span></span>
-                {formData.jobDescription && (
-                  <button onClick={() => clearField("jobDescription")} className="text-slate-400 hover:text-red-500 text-xs lowercase font-normal flex items-center gap-1">
-                    <X size={12} /> clear
-                  </button>
-                )}
-              </label>
-              <textarea 
-                placeholder="Paste the job description or requirements here..." 
-                className="w-full px-4 py-3 h-32 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
-                value={formData.jobDescription || ""}
-                onChange={(e) => onHandleInputChange("jobDescription", e.target.value.replace(/^\s+/g, ""))}
-              />
-            </div>
+        <div className="grid grid-cols-1 gap-6">
+          
+          {/* Job Position */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center">
+              <span>Job Position <span className="text-red-500">*</span></span>
+              {formData.jobPosition && (
+                <button onClick={() => clearField("jobPosition")} className="text-slate-400 hover:text-red-500 text-xs lowercase font-normal flex items-center gap-1 transition-colors">
+                  <X size={12} /> clear
+                </button>
+              )}
+            </label>
+            <input 
+              type="text" 
+              placeholder="e.g. Senior Full Stack Developer" 
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+              value={formData.jobPosition || ""}
+              onChange={(e) => onHandleInputChange("jobPosition", e.target.value.replace(/^\s+/g, ""))}
+            />
+          </div>
+          
+          {/* Job Description */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center">
+              <span>Job Description <span className="text-red-500">*</span></span>
+              {formData.jobDescription && (
+                <button onClick={() => clearField("jobDescription")} className="text-slate-400 hover:text-red-500 text-xs lowercase font-normal flex items-center gap-1 transition-colors">
+                  <X size={12} /> clear
+                </button>
+              )}
+            </label>
+            <textarea 
+              placeholder="Paste the job description or requirements here..." 
+              className="w-full px-4 py-3 h-32 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none shadow-sm"
+              value={formData.jobDescription || ""}
+              onChange={(e) => onHandleInputChange("jobDescription", e.target.value.replace(/^\s+/g, ""))}
+            />
           </div>
         </div>
 
         {/* Configuration Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
           
           {/* Resume Score */}
           <div className="space-y-2">
@@ -179,7 +211,7 @@ const FormContainer = ({
                 min="0" 
                 max="100" 
                 placeholder="e.g. 75" 
-                className="w-full pl-4 pr-12 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                className="w-full pl-4 pr-12 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
                 value={formData.resumeScore ?? ""}
                 onChange={(e) => {
                   const value = e.target.value.replace(/\s+/g, "");
@@ -188,7 +220,7 @@ const FormContainer = ({
                   }
                 }}
               />
-              <span className="absolute right-4 top-2.5 text-slate-400 text-sm font-medium">/ 100</span>
+              <span className="absolute right-4 top-3.5 text-slate-400 text-sm font-medium">/ 100</span>
             </div>
           </div>
 
@@ -197,7 +229,7 @@ const FormContainer = ({
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Duration <span className="text-red-500">*</span></label>
             <div className="relative">
               <select 
-                className="w-full pl-4 pr-10 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none transition-all cursor-pointer invalid:text-slate-400"
+                className="w-full pl-4 pr-10 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none transition-all cursor-pointer invalid:text-slate-400 shadow-sm"
                 value={formData.interviewDuration || ""}
                 onChange={(e) => onHandleInputChange("interviewDuration", e.target.value === "none" ? null : e.target.value)}
               >
@@ -208,7 +240,7 @@ const FormContainer = ({
                 <option value="45 Min">45 Min</option>
                 <option value="60 Min">60 Min</option>
               </select>
-              <Clock size={16} className="absolute right-4 top-3 text-slate-400 pointer-events-none" />
+              <Clock size={16} className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" />
             </div>
           </div>
         </div>
@@ -216,7 +248,7 @@ const FormContainer = ({
         {/* Interview Type Selection */}
         <div className="space-y-3">
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Interview Type <span className="text-red-500">*</span></label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 md:gap-3">
             {InterviewType.map((type: any, index: number) => {
               const isSelected = Array.isArray(formData.interviewType)
                 ? formData.interviewType.includes(type.title)
@@ -239,10 +271,10 @@ const FormContainer = ({
                 <button
                   key={index}
                   onClick={toggleType}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border group ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium transition-all duration-200 border group ${
                     isSelected 
                       ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20' 
-                      : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 shadow-sm'
                   }`}
                 >
                   <type.icon size={16} className={isSelected ? 'text-white' : 'text-slate-500 group-hover:text-blue-600'} />
@@ -257,7 +289,7 @@ const FormContainer = ({
         {/* Experience Level Selection */}
         <div className="space-y-3">
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Experience Level <span className="text-red-500">*</span></label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 md:gap-3">
             {[
               { level: "Junior", icon: User },
               { level: "Mid", icon: UserCheck },
@@ -268,10 +300,10 @@ const FormContainer = ({
                 <button
                   key={level}
                   onClick={() => onHandleInputChange("experienceLevel", isSelected ? null : level)}
-                  className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all duration-200 border group ${
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-200 border group ${
                     isSelected 
                       ? 'bg-slate-800 border-slate-800 text-white shadow-md' 
-                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 shadow-sm'
                   }`}
                 >
                   <Icon size={16} className={isSelected ? 'text-white' : 'text-slate-500'} />
@@ -282,155 +314,84 @@ const FormContainer = ({
           </div>
         </div>
 
-        {/* File Upload */}
-       {/* File Upload */}
-{/* File Upload */}
-<div className="space-y-2">
-  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-    Upload Questions (Optional)
-  </label>
+        {/* File Upload Section */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Upload Questions (Optional)
+            </label>
+            <button
+              type="button"
+              onClick={handleDownloadSample}
+              className="text-xs text-blue-600 hover:underline hover:text-blue-800 transition flex items-center gap-1.5"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m7-7H5" />
+              </svg>
+              Download sample .docx
+            </button>
+          </div>
 
-  {/* NOTE 1: Minimum Question Requirement */}
-  <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
-    <div className="mt-0.5">
-      <svg xmlns="http://www.w3.org/2000/svg"
-        className="w-4 h-4 text-amber-600"
-        fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M12 9v3m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z" />
-      </svg>
-    </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* NOTE 1: Minimum Requirement */}
+            <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200/60 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800 leading-relaxed">
+                <span className="font-bold text-amber-900">Important:</span> Your file must contain at least <span className="font-bold">30 valid questions</span>.
+              </p>
+            </div>
 
-    <p className="text-xs text-amber-700 leading-snug">
-      <span className="font-semibold">Important:</span>  
-      Your uploaded question file must contain at least  
-      <span className="font-bold"> 30 valid interview questions.</span>
-    </p>
-  </div>
+            {/* NOTE 2: Format Guideline */}
+            <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200/60 rounded-lg">
+              <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-800 leading-relaxed">
+                <span className="font-bold text-blue-900">Note:</span> The file must contain <span className="font-bold">questions only</span>—no answers or explanations.
+              </p>
+            </div>
+          </div>
 
-  {/* NOTE 2: "Questions Only" Guideline */}
-  <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-    <div className="mt-0.5">
-      <svg xmlns="http://www.w3.org/2000/svg"
-        className="w-4 h-4 text-blue-600"
-        fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M12 8v4m0 4h.01M4 6h16M4 18h16M4 12h16" />
-      </svg>
-    </div>
-
-    <p className="text-xs text-blue-700 leading-snug">
-      <span className="font-semibold">Note:</span>  
-      The file must contain <span className="font-bold">questions only</span> —  
-      no descriptions, answers, explanations, or paragraphs.
-    </p>
-  </div>
-
-  {/* Sample File Download */}
-{/* Sample File Download */}
-{/* Sample File Download */}
-<div className="flex items-center gap-2 mt-1 text-xs text-slate-600 pl-1">
-
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    className="w-4 h-4 text-blue-600" 
-    fill="none" 
-    viewBox="0 0 24 24" 
-    stroke="currentColor"
-  >
-    <path 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      strokeWidth={2} 
-      d="M12 5v14m7-7H5" 
-    />
-  </svg>
-
-  <button
-    type="button"
-    onClick={async () => {
-      const { Document, Packer, Paragraph } = await import("docx");
-
-      // ❗FIX — file-saver default export
-      const saveAs = (await import("file-saver")).default;
-
-      const questions = [
-  "1. Can you briefly introduce yourself and walk me through your professional background?",
-  "2. What are the key strengths you bring to this role, and how have you demonstrated them in past projects?",
-  "3. Describe a challenging situation you faced at work and how you handled it.",
-  "4. Can you explain a project you are most proud of and the impact it created?",
-  "5. How do you approach problem-solving when you encounter an unexpected issue?",
-  "6. Tell me about a time you had to collaborate with a team — what was your role and contribution?",
-  "7. How do you prioritize tasks when managing multiple deadlines?",
-  "8. Describe a situation where you received critical feedback. How did you respond?",
-  "9. What motivates you in a professional environment, and what kind of work culture helps you perform best?",
-  "10. Why are you interested in this position, and how do you see yourself growing in this role?",
-];
-
-      const doc = new Document({
-        sections: [
-          {
-            children: questions.map(q => new Paragraph(q)),
-          },
-        ],
-      });
-
-      const blob = await Packer.toBlob(doc);
-      saveAs(blob, "sample-interview-questions.docx");
-    }}
-    className="text-blue-600 hover:underline hover:text-blue-800 transition"
-  >
-    Download sample question file (.docx)
-  </button>
-</div>
-
-
-
-
-  {!formData.file ? (
-    <div className="relative border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-slate-50 hover:border-blue-300 transition-colors cursor-pointer group bg-slate-50/30">
-      <input
-        type="file"
-        accept=".pdf,.doc,.docx"
-        onChange={handleFileChange}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-      />
-      <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-3 group-hover:scale-110 transition-transform duration-200">
-        <Upload size={20} />
-      </div>
-      <p className="text-sm text-slate-600 font-medium">Click to upload or drag and drop</p>
-      <p className="text-xs text-slate-400 mt-1">PDF or Word files (DOC/DOCX)</p>
-    </div>
-  ) : (
-    <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-100 rounded-lg">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-white text-blue-600 rounded-md border border-blue-100">
-          <FileText size={20} />
+          {!formData.file ? (
+            <div className="relative border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center text-center hover:bg-slate-50 hover:border-blue-400/50 transition-all cursor-pointer group bg-slate-50/30">
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={handleFileChange}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              />
+              <div className="p-4 bg-blue-50 text-blue-600 rounded-full mb-3 group-hover:scale-110 group-hover:bg-blue-100 transition-all duration-200">
+                <Upload size={24} />
+              </div>
+              <p className="text-sm text-slate-700 font-semibold group-hover:text-blue-700 transition-colors">Click to upload or drag and drop</p>
+              <p className="text-xs text-slate-400 mt-1">PDF or Word files (DOC/DOCX)</p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-white text-blue-600 rounded-lg border border-blue-100 shadow-sm">
+                  <FileText size={24} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800 truncate max-w-[200px] sm:max-w-md">
+                    {formData.file.name}
+                  </p>
+                  <p className="text-xs text-blue-600 font-medium mt-0.5">Ready for upload</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRemoveFile}
+                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                title="Remove file"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          )}
         </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-700 truncate max-w-[200px] sm:max-w-xs">
-            {formData.file.name}
-          </p>
-          <p className="text-xs text-blue-500">File uploaded successfully</p>
-        </div>
-      </div>
-      <button
-        onClick={handleRemoveFile}
-        className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-full transition-colors"
-        title="Remove file"
-      >
-        <X size={18} />
-      </button>
-    </div>
-  )}
-</div>
-
-
 
       </div>
 
       {/* Footer */}
-      <div className="px-8 py-6 bg-slate-50 border-t border-slate-200 flex justify-end">
+      <div className="px-4 py-4 md:px-8 md:py-6 bg-slate-50 border-t border-slate-200 flex justify-end">
         <Button
           onClick={handleSubmit}
           disabled={!isFormValid}

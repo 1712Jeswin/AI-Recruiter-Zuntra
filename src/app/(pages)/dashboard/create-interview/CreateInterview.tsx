@@ -1,10 +1,11 @@
 "use client";
 
-import { Progress } from "@/components/ui/progress";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
+// Components
 import FormContainer from "./_components/FormContainer";
 import QuestionsList from "./_components/QuestionsList";
 import InterviewLink from "./_components/InterviewLink";
@@ -47,7 +48,7 @@ const CreateInterview: React.FC<CreateInterviewProps> = ({ session }) => {
   // ----------------------------------------
   const onQuestionsCreated = (id: string) => {
     setInterviewId(id);
-    setStep(3); // ⭐ Step 3 is now the SLOT CREATION
+    setStep(3);
   };
 
   // ----------------------------------------
@@ -60,64 +61,92 @@ const CreateInterview: React.FC<CreateInterviewProps> = ({ session }) => {
   };
 
   return (
-    <div className="md:ml-2 lg:ml-6 mt-2 px-10 md:px-24 lg:px-44 xl:px-56">
-      {/* Header */}
-      <div className="flex items-center gap-5">
-        <ArrowLeft
-          onClick={handleBack}
-          className="cursor-pointer hover:text-blue-500 transition-colors"
-        />
-        <h1 className="text-2xl font-bold">Create New Interview</h1>
+    <div className="min-h-screen bg-slate-50/30 py-8 md:py-12">
+      <div className="container max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* Header Section */}
+        <div className="mb-8 md:mb-10">
+          <div className="flex items-center gap-4 mb-6">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={handleBack}
+              className="rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors -ml-2"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </Button>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Create New Interview</h1>
+              <p className="text-sm md:text-base text-slate-500 mt-1">Follow the steps to set up your AI-powered interview.</p>
+            </div>
+          </div>
+
+          {/* Progress Indicator Card */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/60">
+             <div className="flex justify-between text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+                <span className={step >= 1 ? "text-blue-600" : ""}>1. Details</span>
+                <span className={step >= 2 ? "text-blue-600" : ""}>2. Questions</span>
+                <span className={step >= 3 ? "text-blue-600" : ""}>3. Scheduling</span>
+                <span className={step >= 4 ? "text-blue-600" : ""}>4. Finish</span>
+             </div>
+             {/* Customizing progress bar color */}
+             <div className="relative w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="absolute top-0 left-0 h-full bg-blue-600 transition-all duration-500 ease-in-out rounded-full"
+                  style={{ width: `${(step / 4) * 100}%` }}
+                />
+             </div>
+          </div>
+        </div>
+
+        {/* Dynamic Content Area */}
+        <div className="transition-all duration-300 ease-in-out">
+          {/* STEP 1 */}
+          {step === 1 && (
+            <FormContainer
+              formData={formData}
+              onHandleInputChange={onHandleInputChange}
+              GoToNextStep={() => setStep(2)}
+            />
+          )}
+
+          {/* STEP 2 – Questions */}
+          {step === 2 && (
+            <QuestionsList
+              formData={formData}
+              session={session}
+              onCreateLink={onQuestionsCreated}
+            />
+          )}
+
+          {/* STEP 3 – CREATE SLOTS */}
+          {step === 3 && (
+           <CreateSlots
+            interviewId={interviewId}
+            duration={formData.interviewDuration}
+            onDone={(startDate, endDate) => {
+              setFormData((prev) => ({
+                ...prev,
+                slotStartDate: startDate,
+                slotEndDate: endDate,
+              }));
+              setStep(4);
+            }}
+            onBack={() => setStep(2)}
+           />
+          )}
+
+          {/* STEP 4 – INTERVIEW LINK */}
+          {step === 4 && (
+            <InterviewLink
+              interviewId={interviewId}
+              formData={formData}
+              onCreate={() => router.push(`/interview/${interviewId}`)}
+              onReset={handleReset}
+            />
+          )}
+        </div>
       </div>
-
-      {/* Progress */}
-      <Progress value={(step / 4) * 100} className="my-4 [&>div]:bg-blue-600" />
-
-      {/* STEP 1 */}
-      {step === 1 && (
-        <FormContainer
-          formData={formData}
-          onHandleInputChange={onHandleInputChange}
-          GoToNextStep={() => setStep(2)}
-        />
-      )}
-
-      {/* STEP 2 – Questions */}
-      {step === 2 && (
-        <QuestionsList
-          formData={formData}
-          session={session}
-          onCreateLink={onQuestionsCreated}
-        />
-      )}
-
-      {/* ⭐ STEP 3 – CREATE SLOTS */}
-      {step === 3 && (
-       <CreateSlots
-        interviewId={interviewId}
-        duration={formData.interviewDuration}
-        onDone={(startDate, endDate) => {
-        setFormData((prev) => ({
-        ...prev,
-        slotStartDate: startDate,
-        slotEndDate: endDate,
-        }));
-        setStep(4);
-       }}
-       onBack={() => setStep(2)}
-       />
-
-      )}
-
-      {/* ⭐ STEP 4 – INTERVIEW LINK */}
-      {step === 4 && (
-        <InterviewLink
-          interviewId={interviewId}
-          formData={formData}
-          onCreate={() => router.push(`/interview/${interviewId}`)}
-          onReset={handleReset}
-        />
-      )}
     </div>
   );
 };

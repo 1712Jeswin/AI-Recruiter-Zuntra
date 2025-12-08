@@ -291,7 +291,7 @@ export default function InterviewLeaderboardClient({
                       <td className="py-3 px-4 text-right">
                         <button
                           onClick={() =>
-                            (window.location.href = `/interviews/${interview.id}/candidates/${c.id}`)
+                            (window.location.href = `/interview/${interview.id}/candidates/${c.id}`)
                           }
                           className="text-indigo-600 flex items-center gap-1"
                         >
