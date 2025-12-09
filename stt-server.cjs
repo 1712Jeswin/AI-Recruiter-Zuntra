@@ -53,6 +53,9 @@ wss.on("connection", (ws) => {
   });
 });
 
-server.listen(3001, () => {
-  console.log("🚀 STT server running at ws://localhost:3001");
+const PORT = process.env.PORT || 3001;
+
+server.listen(PORT, () => {
+  console.log(`🚀 STT server running at ws://localhost:${PORT}`);
 });
+
