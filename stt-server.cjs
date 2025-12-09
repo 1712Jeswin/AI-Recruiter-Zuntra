@@ -10,8 +10,9 @@ const wss = new WebSocketServer({ server });
 
 // Google STT client
 const client = new SpeechClient({
-  keyFilename: process.env.SPEECH_TO_TEXT_KEY,
+  keyFilename: "/etc/secrets/stt-key.json",
 });
+
 
 wss.on("connection", (ws) => {
   console.log("🔌 Client connected to STT server");
