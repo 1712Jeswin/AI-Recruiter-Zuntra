@@ -4,19 +4,33 @@ const { createServer } = require("http");
 const { WebSocketServer } = require("ws");
 const { SpeechClient } = require("@google-cloud/speech");
 
+// ------------------------
+// EXPRESS + HTTP SERVER
+// ------------------------
 const app = express();
 const server = createServer(app);
-const wss = new WebSocketServer({ server });
 
-// Google STT client
-const client = new SpeechClient({
-  keyFilename: "/etc/secrets/stt-key.json",
+// Health check for Render
+app.get("/healthz", (req, res) => {
+  res.send("OK");
 });
 
+// ------------------------
+// GOOGLE STT CLIENT
+// ------------------------
+const client = new SpeechClient({
+  keyFilename: "/etc/secrets/stt-key.json", // Render secret file
+});
+
+// ------------------------
+// WEBSOCKET SERVER
+// ------------------------
+const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws) => {
   console.log("🔌 Client connected to STT server");
 
+  // Create streaming recognition session
   let recognizeStream = client
     .streamingRecognize({
       config: {
@@ -24,7 +38,7 @@ wss.on("connection", (ws) => {
         sampleRateHertz: 48000,
         languageCode: "en-US",
       },
-      interimResults: true, // Google returns interim + final
+      interimResults: true, // Google returns interim + final results
     })
     .on("data", (data) => {
       const result = data.results?.[0];
@@ -32,7 +46,7 @@ wss.on("connection", (ws) => {
 
       const transcript = result.alternatives?.[0]?.transcript?.trim() || "";
 
-      // 🔥 ONLY send FINAL RESULTS — never interim
+      // Send only FINAL transcript (you can switch this if needed)
       if (result.isFinal && transcript.length > 0) {
         console.log("🎤 FINAL:", transcript);
         ws.send(JSON.stringify({ text: transcript }));
@@ -40,23 +54,43 @@ wss.on("connection", (ws) => {
     })
     .on("error", (err) => {
       console.error("🔥 STT ERROR:", err);
-      ws.send(JSON.stringify({ error: "stt_error" }));
+      try {
+        ws.send(JSON.stringify({ error: "stt_error" }));
+      } catch {}
     });
 
+  // When audio chunks come in from browser
   ws.on("message", (msg) => {
-    // Forward raw audio chunks to Google
-    if (recognizeStream) recognizeStream.write(msg);
+    if (recognizeStream) {
+      try {
+        recognizeStream.write(msg);
+      } catch (err) {
+        console.error("🔥 STREAM WRITE ERROR:", err);
+      }
+    }
   });
 
+  // Cleanup on disconnect
   ws.on("close", () => {
     console.log("❌ STT connection closed");
-    if (recognizeStream) recognizeStream.end();
+    if (recognizeStream) {
+      try {
+        recognizeStream.end();
+      } catch {}
+    }
+    recognizeStream = null;
+  });
+
+  ws.on("error", (err) => {
+    console.error("⚠️ WS ERROR:", err);
   });
 });
 
+// ------------------------
+// RENDER PORT HANDLING
+// ------------------------
 const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {
   console.log(`🚀 STT server running at ws://localhost:${PORT}`);
 });
-

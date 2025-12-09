@@ -355,49 +355,62 @@ export default function InterviewPage({
 
     /* ------------------ STT SYSTEM ------------------ */
     const startSTT = async () => {
-        try {
-            stopSTT();
-            stopAudio();
+    try {
+        stopSTT();
+        stopAudio();
 
-            const socket = new WebSocket(`ws://${window.location.hostname}:3001`);
-            wsRef.current = socket;
+        // CONNECT TO RENDER STT SERVER
+        const socket = new WebSocket(process.env.NEXT_PUBLIC_STT_URL!);
+        wsRef.current = socket;
 
-            socket.onopen = async () => {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    audio: true,
-                });
-                streamRef.current = stream;
+        socket.onopen = async () => {
+            console.log("🎧 Connected to STT server");
 
-                const recorder = new MediaRecorder(stream, {
-                    mimeType: "audio/webm; codecs=opus",
-                });
-                recorderRef.current = recorder;
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            streamRef.current = stream;
 
-                recorder.ondataavailable = (e) => {
-                    if (e.data.size > 0 && socket.readyState === WebSocket.OPEN) {
-                        socket.send(e.data);
-                    }
-                };
+            const recorder = new MediaRecorder(stream, {
+                mimeType: "audio/webm; codecs=opus",
+            });
+            recorderRef.current = recorder;
 
-                recorder.start(150);
-
-                setIsListening(true);
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0 && socket.readyState === WebSocket.OPEN) {
+                    socket.send(e.data);
+                }
             };
 
-            socket.onmessage = (event) => {
-                try {
-                    const msg = JSON.parse(event.data);
-                    if (!msg.text) return;
-                    const incoming = msg.text.trim();
-                    lastTranscriptRef.current = incoming;
-                    setAnswer((prev) => (prev + " " + incoming).trim());
+            recorder.start(150);
+            setIsListening(true);
+        };
 
-                    resetSilenceTimer();
+        socket.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                if (!msg.text) return;
 
-                } catch { }
-            };
-        } catch { }
-    };
+                const incoming = msg.text.trim();
+                lastTranscriptRef.current = incoming;
+                setAnswer((prev) => (prev + " " + incoming).trim());
+
+                resetSilenceTimer();
+            } catch { }
+        };
+
+        socket.onerror = (err) => {
+            console.error("STT WebSocket Error:", err);
+        };
+
+        socket.onclose = () => {
+            console.log("🔌 STT disconnected");
+            setIsListening(false);
+        };
+
+    } catch (err) {
+        console.error("❌ startSTT ERROR:", err);
+    }
+};
+
 
     /* ------------------ UNBLUR ------------------ */
     const handleUnblur = async () => {
