@@ -334,7 +334,7 @@ export default function ScheduledPage() {
                 ? "Loading..."
                 : timeLeft > 0
                 ? "Interview Not Started"
-                : "Go to Interview Dashboard"}
+                : "Slot time ended"}
               <ArrowRight className="w-5 h-5" />
             </button>
           </div>

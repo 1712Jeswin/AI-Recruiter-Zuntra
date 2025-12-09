@@ -131,4 +131,3 @@ export default async function StartPage({
     <InterviewClientWrapper interviewId={interview_id} candidateId={candidateId} />
   );
 }
-
