@@ -1,5 +1,5 @@
 
-export const runtime = "nodejs";
+export const runtime = "nodejs"
 
 
 import { NextResponse } from "next/server";
