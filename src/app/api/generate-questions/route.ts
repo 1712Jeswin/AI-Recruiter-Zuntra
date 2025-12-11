@@ -1,5 +1,11 @@
+// ------------------------------------------
+// FORCE NODE RUNTIME (CRITICAL FOR VERCEL)
+// ------------------------------------------
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { VertexAI } from "@google-cloud/vertexai";
+import { GoogleAuth } from "google-auth-library";
 import mammoth from "mammoth";
 
 // =============================================================
@@ -16,20 +22,25 @@ if (!process.env.GOOGLE_SERVICE_ACCOUNT_BASE64) {
 
 // Decode Base64 Service Account JSON for Vercel
 function loadCredentials() {
+  console.log("Decoding Base64 credentials...");
   const base64 = process.env.GOOGLE_SERVICE_ACCOUNT_BASE64!;
   const json = Buffer.from(base64, "base64").toString("utf8");
-  return JSON.parse(json);
+  const creds = JSON.parse(json);
+  console.log("Decoded service account email:", creds.client_email);
+  return creds;
 }
 
 // Create Vertex Client (Vercel Friendly)
 function createVertexClient() {
   const credentials = loadCredentials();
 
+  console.log("Creating VertexAI client…");
+
   return new VertexAI({
     project: process.env.GCP_PROJECT_ID!,
     location: "us-central1",
     googleAuthOptions: {
-      credentials, // <= THIS IS THE CORRECT WAY
+      credentials,
     },
   });
 }
@@ -39,10 +50,10 @@ function createVertexClient() {
 // =============================================================
 
 const PREFERRED_MODELS = [
-  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-2.0-flash`,
-  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/models/gemini-2.0-flash`,
-  "models/gemini-2.0-flash",
-  "google/gemini-2.0-flash",
+  "models/gemini-1.5-pro",
+  "models/gemini-1.5-pro-001",
+  "models/gemini-1.5-flash",
+  "models/gemini-1.5-flash-001",
 ];
 
 async function getAvailableModel() {
@@ -51,11 +62,15 @@ async function getAvailableModel() {
 
   for (const modelId of PREFERRED_MODELS) {
     try {
-      return vertex.getGenerativeModel({
+      console.log("Trying model:", modelId);
+      const model = vertex.getGenerativeModel({
         model: modelId,
         generationConfig: { responseMimeType: "application/json" },
       });
+      console.log("Loaded model successfully:", modelId);
+      return model;
     } catch (err) {
+      console.error("Model failed:", modelId, err);
       lastErr = err;
     }
   }
@@ -79,6 +94,8 @@ export async function POST(request: Request) {
       if (!file) {
         return NextResponse.json({ error: "No file provided" }, { status: 400 });
       }
+
+      console.log("Processing uploaded file:", file.name);
 
       const fileText = await extractTextFromFile(file);
 
@@ -106,12 +123,14 @@ export async function POST(request: Request) {
         experienceLevel = "Mid",
       } = body;
 
+      console.log("Generating questions for:", jobPosition);
+
       const prompt = buildGenerationPrompt(
-        String(jobPosition),
-        String(jobDescription),
-        String(interviewDuration),
+        jobPosition,
+        jobDescription,
+        interviewDuration,
         Array.isArray(interviewType) ? interviewType : [String(interviewType)],
-        String(experienceLevel)
+        experienceLevel
       );
 
       const aiResponse = await generateAIContent(prompt);
@@ -136,34 +155,36 @@ export async function POST(request: Request) {
 // =============================================================
 
 async function extractTextFromFile(file: File): Promise<string> {
+  console.log("Extracting text from file with MIME:", file.type);
+
   const buffer = Buffer.from(await file.arrayBuffer());
   const mime = file.type;
 
   if (mime === "application/pdf") return extractUsingGemini(buffer, mime);
-
   if (mime.startsWith("image/")) return extractUsingGemini(buffer, mime);
 
   if (
     mime ===
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   ) {
+    console.log("Extracting DOCX via Mammoth");
     const result = await mammoth.extractRawText({ buffer });
     return result?.value || "";
   }
-
-  if (mime === "application/msword") return buffer.toString("utf-8");
 
   return buffer.toString("utf-8");
 }
 
 // Extract text from PDF or Image using Gemini Vision
 async function extractUsingGemini(buffer: Buffer, mimeType: string) {
+  console.log("Extracting via Gemini Vision with mime:", mimeType);
+
   const base64 = buffer.toString("base64");
   const model = await getAvailableModel();
 
   const result = await model.generateContent({
     contents: [
-      { role: "user", parts: [{ text: "Extract all readable plain text." }] },
+      { role: "user", parts: [{ text: "Extract readable text only." }] },
       {
         role: "user",
         parts: [
@@ -175,9 +196,12 @@ async function extractUsingGemini(buffer: Buffer, mimeType: string) {
     ],
   });
 
-  return (
-    result?.response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ""
-  );
+  const text =
+    result?.response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+
+  console.log("Gemini Vision Extracted Text Length:", text.length);
+
+  return text;
 }
 
 // =============================================================
@@ -185,17 +209,25 @@ async function extractUsingGemini(buffer: Buffer, mimeType: string) {
 // =============================================================
 
 async function generateAIContent(prompt: string) {
+  console.log("Sending prompt to Vertex:", prompt.slice(0, 200));
+
   const model = await getAvailableModel();
 
   const result = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
   });
 
-  const raw = result?.response?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const raw =
+    result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-  if (!raw) throw new Error("Vertex returned empty response");
+  console.log("Raw Vertex Output:", raw);
 
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("JSON parse failed. Raw output:", raw);
+    throw new Error("Vertex returned invalid JSON");
+  }
 }
 
 // =============================================================
@@ -207,7 +239,10 @@ function normalizeToType2(aiResponse: any, selectedTypes?: string[]) {
     questions: [],
   };
 
-  if (!aiResponse?.questions) return output;
+  if (!aiResponse?.questions) {
+    console.log("AI Response missing questions field");
+    return output;
+  }
 
   const singleType =
     Array.isArray(selectedTypes) && selectedTypes.length === 1
@@ -215,25 +250,13 @@ function normalizeToType2(aiResponse: any, selectedTypes?: string[]) {
       : "";
 
   if (Array.isArray(aiResponse.questions)) {
-    output.questions = aiResponse.questions.map((q: any) => ({
-      question: String(q.question || "").trim(),
-      type: singleType || q.type || "",
-    }));
-    return output;
+    return {
+      questions: aiResponse.questions.map((q: any) => ({
+        question: q.question?.trim() || "",
+        type: singleType || q.type || "",
+      })),
+    };
   }
-
-  Object.values(aiResponse.questions).forEach((list: any) => {
-    if (Array.isArray(list)) {
-      list.forEach((q) => {
-        if (typeof q === "string" && q.trim()) {
-          output.questions.push({
-            question: q.trim(),
-            type: singleType || "",
-          });
-        }
-      });
-    }
-  });
 
   return output;
 }
@@ -255,14 +278,6 @@ function buildGenerationPrompt(
       : ["Technical", "Behavioral", "Experience", "Problem Solving", "Leadership"];
 
   const typesStr = selectedTypes.join(", ");
-
-  const experienceGuidelines: Record<string, string> = {
-    Junior:
-      "Ask simple, beginner questions",
-    Mid: "Ask practical, scenario-based questions",
-    Senior:
-      "Ask deep, architectural, and leadership questions",
-  };
 
   return `
 Generate EXACTLY 30 interview questions.
