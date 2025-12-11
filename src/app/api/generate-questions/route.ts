@@ -42,12 +42,10 @@ const vertex = createVertexClient();
 
 // ---------- WORKING MODEL LIST ----------
 const PREFERRED_MODELS = [
-  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/models/gemini-1.5-flash-001`,
-  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/models/gemini-1.5-pro-001`,
-  "models/gemini-1.5-flash-001",
-  "models/gemini-1.5-pro-001",
-  "gemini-1.5-flash-001",
-  "gemini-1.5-pro-001",
+  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-2.0-flash`,
+  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/models/gemini-2.0-flash`,
+  "models/gemini-2.0-flash",
+  "google/gemini-2.0-flash",
 ];
 
 // ---------- Resolve Model ----------
