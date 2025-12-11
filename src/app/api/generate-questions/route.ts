@@ -1,90 +1,63 @@
-// ------------------------------------------
-// FORCE NODE RUNTIME (CRITICAL FOR VERCEL)
-// ------------------------------------------
-export const runtime = "nodejs";
-
 import { NextResponse } from "next/server";
 import { VertexAI } from "@google-cloud/vertexai";
-import { GoogleAuth } from "google-auth-library";
 import mammoth from "mammoth";
 
-// =============================================================
-//               🔐 ENV VALIDATION + BASE64 LOADER
-// =============================================================
+/**
+ * Required env:
+ *  - GCP_PROJECT_ID
+ *  - GOOGLE_APPLICATION_CREDENTIALS (absolute path to service account JSON)
+ */
 
+// const pdf = require("pdf-parse");
+
+// ---------- ENV VALIDATION ----------
 if (!process.env.GCP_PROJECT_ID) {
-  throw new Error("Missing GCP_PROJECT_ID env variable");
+  throw new Error("Missing GCP_PROJECT_ID env var");
+}
+if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  throw new Error("Missing GOOGLE_APPLICATION_CREDENTIALS env var");
 }
 
-if (!process.env.GOOGLE_SERVICE_ACCOUNT_BASE64) {
-  throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_BASE64 env variable");
-}
+// ---------- Vertex Client ----------
+const vertex = new VertexAI({
+  project: process.env.GCP_PROJECT_ID,
+  location: "us-central1",
+  googleAuthOptions: {
+    keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  },
+});
 
-// Decode Base64 Service Account JSON for Vercel
-function loadCredentials() {
-  console.log("Decoding Base64 credentials...");
-  const base64 = process.env.GOOGLE_SERVICE_ACCOUNT_BASE64!;
-  const json = Buffer.from(base64, "base64").toString("utf8");
-  const creds = JSON.parse(json);
-  console.log("Decoded service account email:", creds.client_email);
-  return creds;
-}
-
-// Create Vertex Client (Vercel Friendly)
-function createVertexClient() {
-  const credentials = loadCredentials();
-
-  console.log("Creating VertexAI client…");
-
-  return new VertexAI({
-    project: process.env.GCP_PROJECT_ID!,
-    location: "us-central1",
-    googleAuthOptions: {
-      credentials,
-    },
-  });
-}
-
-// =============================================================
-//                      MODEL CONFIG
-// =============================================================
-
+// Preferred model list
 const PREFERRED_MODELS = [
-  "gemini-1.0-pro",
-  "gemini-1.0-pro-vision",
+  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-2.0-flash`,
+  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/models/gemini-2.0-flash`,
+  "models/gemini-2.0-flash",
+  "google/gemini-2.0-flash",
 ];
 
+// ---------- Resolve Model ----------
 async function getAvailableModel() {
-  const vertex = createVertexClient();
   let lastErr: any = null;
-
   for (const modelId of PREFERRED_MODELS) {
     try {
-      console.log("Trying model:", modelId);
-      const model = vertex.getGenerativeModel({
+      const candidate = vertex.getGenerativeModel({
         model: modelId,
         generationConfig: { responseMimeType: "application/json" },
       });
-      console.log("Loaded model successfully:", modelId);
-      return model;
+      return candidate;
     } catch (err) {
-      console.error("Model failed:", modelId, err);
       lastErr = err;
     }
   }
-
   throw lastErr || new Error("No available Vertex model found");
 }
 
-// =============================================================
-//                      MAIN HANDLER
-// =============================================================
-
+// ---------- Main Handler ----------
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") || "";
 
-    // ---------- A: File Upload Mode ----------
+    // -------------------- CASE A: multipart with file --------------------
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
       const file = formData.get("file") as File | null;
@@ -93,23 +66,27 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "No file provided" }, { status: 400 });
       }
 
-      console.log("Processing uploaded file:", file.name);
-
       const fileText = await extractTextFromFile(file);
 
-      const jobPosition = String(formData.get("jobPosition") || "");
-      const jobDescription = String(formData.get("jobDescription") || "");
+      const jobPosition = String(formData.get("jobPosition") || "").trim();
+      const jobDescription = String(formData.get("jobDescription") || "").trim();
       const interviewTypes = JSON.parse(
         String(formData.get("interviewType") || "[]")
       ) as string[];
 
-      const prompt = buildReviewPrompt(fileText, jobPosition, jobDescription, interviewTypes);
-      const aiResponse = await generateAIContent(prompt);
+      const prompt = buildReviewPrompt(
+        fileText,
+        jobPosition,
+        jobDescription,
+        interviewTypes
+      );
 
+      const aiResponse = await generateAIContent(prompt);
       return NextResponse.json(normalizeToType2(aiResponse, interviewTypes));
+
     }
 
-    // ---------- B: JSON Body Mode ----------
+    // -------------------- CASE B: application/json --------------------
     if (contentType.includes("application/json")) {
       const body = await request.json();
 
@@ -121,18 +98,19 @@ export async function POST(request: Request) {
         experienceLevel = "Mid",
       } = body;
 
-      console.log("Generating questions for:", jobPosition);
-
       const prompt = buildGenerationPrompt(
-        jobPosition,
-        jobDescription,
-        interviewDuration,
-        Array.isArray(interviewType) ? interviewType : [String(interviewType)],
-        experienceLevel
+        String(jobPosition),
+        String(jobDescription),
+        String(interviewDuration),
+        Array.isArray(interviewType)
+          ? (interviewType as string[])
+          : [String(interviewType)],
+        String(experienceLevel)
       );
 
-      const aiResponse = await generateAIContent(prompt);
-      return NextResponse.json(normalizeToType2(aiResponse));
+     const aiResponse = await generateAIContent(prompt);
+    return NextResponse.json(normalizeToType2(aiResponse));
+
     }
 
     return NextResponse.json(
@@ -142,126 +120,196 @@ export async function POST(request: Request) {
   } catch (err: any) {
     console.error("Error in /api/generate-questions:", err);
     return NextResponse.json(
-      { error: err.message || "Internal Server Error" },
+      { error: err?.message || "Internal Server Error" },
       { status: 500 }
     );
   }
 }
 
-// =============================================================
-//                TEXT EXTRACTION HELPERS
-// =============================================================
+// ====================================================================
+//                        FILE TEXT EXTRACTION
+// ====================================================================
 
 async function extractTextFromFile(file: File): Promise<string> {
-  console.log("Extracting text from file with MIME:", file.type);
-
   const buffer = Buffer.from(await file.arrayBuffer());
   const mime = file.type;
 
-  if (mime === "application/pdf") return extractUsingGemini(buffer, mime);
-  if (mime.startsWith("image/")) return extractUsingGemini(buffer, mime);
+  // ---------- 1. PDF → Gemini ----------
+  if (mime === "application/pdf") {
+    return await extractUsingGemini(buffer, mime);
+  }
 
+  // ---------- 2. Image → Gemini ----------
+  if (
+    mime.startsWith("image/") &&
+    (mime.endsWith("png") ||
+      mime.endsWith("jpeg") ||
+      mime.endsWith("jpg") ||
+      mime.endsWith("webp"))
+  ) {
+    return await extractUsingGemini(buffer, mime);
+  }
+
+  // ---------- 3. DOCX → Mammoth ----------
   if (
     mime ===
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   ) {
-    console.log("Extracting DOCX via Mammoth");
     const result = await mammoth.extractRawText({ buffer });
     return result?.value || "";
   }
 
+  // ---------- 4. DOC → fallback ----------
+  if (mime === "application/msword") {
+    return buffer.toString("utf-8");
+  }
+
+  // ---------- 5. Other files → fallback ----------
   return buffer.toString("utf-8");
 }
 
-// Extract text from PDF or Image using Gemini Vision
+// ---------- Gemini Parser for PDF & Images ----------
 async function extractUsingGemini(buffer: Buffer, mimeType: string) {
-  console.log("Extracting via Gemini Vision with mime:", mimeType);
-
   const base64 = buffer.toString("base64");
   const model = await getAvailableModel();
 
+  const prompt = `
+Extract all readable text from this document or image.
+Return ONLY plain text. No markdown. No code blocks.
+Preserve logical reading order.
+`;
+
   const result = await model.generateContent({
     contents: [
-      { role: "user", parts: [{ text: "Extract readable text only." }] },
+      { role: "user", parts: [{ text: prompt }] },
       {
         role: "user",
         parts: [
           {
-            inlineData: { mimeType, data: base64 },
+            inlineData: {
+              mimeType,
+              data: base64,
+            },
           },
         ],
       },
     ],
   });
 
-  const text =
-    result?.response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
-
-  console.log("Gemini Vision Extracted Text Length:", text.length);
-
-  return text;
+  return (
+    result?.response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ""
+  );
 }
 
-// =============================================================
-//                AI QUESTION GENERATION LOGIC
-// =============================================================
+// ====================================================================
+//                        GENERATE QUESTIONS
+// ====================================================================
 
 async function generateAIContent(prompt: string) {
-  console.log("Sending prompt to Vertex:", prompt.slice(0, 200));
-
-  const model = await getAvailableModel();
-
-  const result = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-  });
-
-  const raw =
-    result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-  console.log("Raw Vertex Output:", raw);
-
   try {
-    return JSON.parse(raw);
+    const model = await getAvailableModel();
+
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    });
+
+    const rawText =
+      result?.response?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!rawText) {
+      console.error("Vertex raw result (unexpected shape):", JSON.stringify(result, null, 2));
+      throw new Error("No text returned from Vertex model");
+    }
+
+    return JSON.parse(rawText);
   } catch (err) {
-    console.error("JSON parse failed. Raw output:", raw);
-    throw new Error("Vertex returned invalid JSON");
+    console.error("Vertex Generation Error:", err);
+    throw err;
   }
 }
 
-// =============================================================
-//                NORMALIZER (Final Output Formatting)
-// =============================================================
+// ====================================================================
+//                        NORMALIZER
+// ====================================================================
+
+// function normalizeToType2(aiResponse: any) {
+//   const output: { questions: { question: string; type: string }[] } = {
+//     questions: [],
+//   };
+
+//   if (!aiResponse || !aiResponse.questions) return output;
+
+//   // Case: AI already returned an array [{question}]
+//   if (Array.isArray(aiResponse.questions)) {
+//    output.questions = aiResponse.questions
+//   .filter((q: any) => q?.question)
+//   .map((q: any) => ({
+//     question: String(q.question).trim(),
+//     type: String(q.type || "").trim(),
+//   }));
+
+//     return output;
+//   }
+
+//   // Fallback for object format
+//   Object.entries(aiResponse.questions).forEach(([_, list]) => {
+//     if (Array.isArray(list)) {
+//       list.forEach((q) => {
+//         if (q && typeof q === "string" && q.trim()) {
+//           output.questions.push({ question: q.trim(), type: "" });
+//         }
+//       });
+//     }
+//   });
+
+//   return output;
+// }
 
 function normalizeToType2(aiResponse: any, selectedTypes?: string[]) {
   const output: { questions: { question: string; type: string }[] } = {
     questions: [],
   };
 
-  if (!aiResponse?.questions) {
-    console.log("AI Response missing questions field");
-    return output;
-  }
+  if (!aiResponse || !aiResponse.questions) return output;
 
   const singleType =
     Array.isArray(selectedTypes) && selectedTypes.length === 1
       ? selectedTypes[0]
       : "";
 
+  // Case: AI already returned an array [{question}]
   if (Array.isArray(aiResponse.questions)) {
-    return {
-      questions: aiResponse.questions.map((q: any) => ({
-        question: q.question?.trim() || "",
-        type: singleType || q.type || "",
-      })),
-    };
+    output.questions = aiResponse.questions
+      .filter((q: any) => q?.question)
+      .map((q: any) => ({
+        question: String(q.question).trim(),
+        type: singleType ? singleType : String(q.type || "").trim(),
+      }));
+
+    return output;
   }
+
+  // Fallback for object format
+  Object.entries(aiResponse.questions).forEach(([_, list]) => {
+    if (Array.isArray(list)) {
+      list.forEach((q) => {
+        if (q && typeof q === "string" && q.trim()) {
+          output.questions.push({
+            question: q.trim(),
+            type: singleType || "",
+          });
+        }
+      });
+    }
+  });
 
   return output;
 }
 
-// =============================================================
-//                PROMPT BUILDERS
-// =============================================================
+
+// ====================================================================
+//                        PROMPT BUILDERS
+// ====================================================================
 
 function buildGenerationPrompt(
   jobPosition: string,
@@ -270,26 +318,65 @@ function buildGenerationPrompt(
   interviewType: string[],
   experienceLevel: string
 ): string {
+  // If recruiter selects nothing, default to all 5
   const selectedTypes =
     interviewType.length > 0
       ? interviewType
       : ["Technical", "Behavioral", "Experience", "Problem Solving", "Leadership"];
 
-  const typesStr = selectedTypes.join(", ");
+  const typesString = selectedTypes.join(", ");
+
+  const experienceGuidelines: Record<string, string> = {
+    Junior:
+      "Ask simple, fundamental, beginner-friendly questions that test understanding rather than deep expertise.",
+    Mid: "Ask practical, scenario-based, debugging and applied knowledge questions.",
+    Senior:
+      "Ask deep, architectural, system-design, leadership, high-impact reasoning questions.",
+  };
+
+  const levelGuideline =
+    experienceGuidelines[experienceLevel] || "Match questions to the experience level.";
 
   return `
-Generate EXACTLY 30 interview questions.
-Types: ${typesStr}
-Job Role: ${jobPosition}
-Experience: ${experienceLevel}
+You are an expert AI interview question generator.
+
+Your task:
+Generate **EXACTLY 30** interview questions.
+
+Each question must have:
+- "question": the question text
+- "type": one of these → ${typesString}
 
 Rules:
-- Even distribution across selected types
-- Unique questions
-- JSON output only
+1. Generate questions ONLY from the selected types listed above.
+2. The 30 questions MUST be evenly distributed across the selected types.
+   Examples:
+   - If 1 type selected → all 30 belong to that type.
+   - If 2 types selected → ~15 per type.
+   - If 3 types selected → ~10 per type.
+   - If 4 types selected → ~7–8 per type.
+   - If 5 types selected → ~6 per type.
+3. Every question MUST be completely unique (no rephrased duplicates).
+4. All questions must match:
+   - Job Role: ${jobPosition}
+   - Experience Level: ${experienceLevel}
+   - Job Description responsibility & context
+5. Apply the level-specific difficulty:
+   ${levelGuideline}
+6. Avoid generic or textbook-style questions.
+7. Output must be ONLY valid JSON. No markdown. No commentary.
 
-Job Description:
+The required output structure is:
+
+{
+  "questions": [
+    { "question": "string", "type": "string" }
+  ]
+}
+
+--- Job Description ---
 ${jobDescription}
+------------------------
 `;
 }
 
@@ -300,16 +387,28 @@ function buildReviewPrompt(
   interviewTypes: string[]
 ): string {
   return `
-Extract ONLY interview questions from this document.
+You are an expert recruitment assistant.
+Extract ONLY the interview questions from the document.
 
-Output:
+Important:
+- DO NOT assign any category or type.
+- DO NOT attempt to classify questions.
+- Return ONLY the detected questions.
+- No commentary. No markdown.
+
+Output format:
 {
   "questions": [
     { "question": "string" }
   ]
 }
 
-Document:
+Document content:
+----------------
 ${fileText}
+----------------
+
+Extract as many valid interview questions as possible.
+If sentences resemble questions but are not valid interview questions, ignore them.
 `;
 }
