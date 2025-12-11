@@ -7,6 +7,35 @@ import { randomUUID } from "crypto";
 import { VertexAI } from "@google-cloud/vertexai";
 import PDFParser from "pdf2json";
 
+// ------------ ENV VALIDATION ------------
+if (!process.env.GCP_PROJECT_ID) {
+  throw new Error("Missing GCP_PROJECT_ID");
+}
+if (!process.env.GOOGLE_SERVICE_ACCOUNT_BASE64) {
+  throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_BASE64");
+}
+
+// ------------ LOAD BASE64 CREDENTIALS ------------
+function loadCredentials() {
+  const json = Buffer.from(
+    process.env.GOOGLE_SERVICE_ACCOUNT_BASE64!,
+    "base64"
+  ).toString("utf8");
+
+  return JSON.parse(json);
+}
+
+// ------------ CREATE WORKING VERTEX CLIENT ------------
+function createVertexClient() {
+  return new VertexAI({
+    project: process.env.GCP_PROJECT_ID!,
+    location: "us-central1",
+    googleAuthOptions: {
+      credentials: loadCredentials(),
+    },
+  });
+}
+
 // ------------ SAFE PDF to TEXT ------------
 async function extractPdfText(buffer: Buffer): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -45,7 +74,7 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   });
 }
 
-// ------------ CLEAN JSON ------------
+// ------------ CLEAN JSON OUTPUT ------------
 function cleanJSON(str: string) {
   return str
     .replace(/```json/gi, "")
@@ -53,6 +82,10 @@ function cleanJSON(str: string) {
     .replace(/\n/g, " ")
     .trim();
 }
+
+// ====================================================================
+//                            MAIN HANDLER
+// ====================================================================
 
 export async function POST(req: Request) {
   try {
@@ -64,7 +97,6 @@ export async function POST(req: Request) {
 
     const candidateId = candidateIdRaw?.trim();
 
-    // Validate
     if (!candidateId)
       return NextResponse.json({ error: "Missing candidateId" }, { status: 400 });
 
@@ -74,7 +106,6 @@ export async function POST(req: Request) {
     if (!file)
       return NextResponse.json({ error: "Resume file missing" }, { status: 400 });
 
-    // Extract Resume Text Safely
     const buffer = Buffer.from(await file.arrayBuffer());
     let resumeText = await extractPdfText(buffer);
 
@@ -82,7 +113,6 @@ export async function POST(req: Request) {
       resumeText = "Resume parsing failed or text is empty.";
     }
 
-    // Fetch Job Description
     const job = await db.query.interview.findFirst({
       where: (i, { eq }) => eq(i.id, interviewId),
     });
@@ -94,7 +124,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // ------------ SINGLE AI CALL ------------
+    // ------------ AI PROMPT (UNCHANGED) ------------
     const prompt = `
 You are an expert resume evaluator and technical interviewer.
 
@@ -116,10 +146,9 @@ Return ONLY valid JSON in the EXACT STRUCTURE below:
 
 Rules:
 - ONLY JSON. No markdown. No explanations.
-- evaluation = exactly the structure above, scores 0.0–1.0.
-- questions MUST BE EXACTLY 5 objects.
-- Each object MUST be: { "question": "..." }
-- Questions must be personalized based on resume & job description.
+- evaluation = exactly the structure above.
+- questions MUST be EXACTLY 5.
+- Each must be: { "question": "..." }
 
 Job Description:
 ${job.jobDescription}
@@ -128,13 +157,11 @@ Resume:
 ${resumeText}
 `;
 
-    const vertex = new VertexAI({
-      project: process.env.GCP_PROJECT_ID!,
-      location: "us-central1",
-    });
+    // ------------ USE WORKING VERTEX CLIENT ------------
+    const vertex = createVertexClient();
 
     const model = vertex.getGenerativeModel({
-      model: "models/gemini-2.0-flash",
+      model: "models/gemini-2.0-flash", // ✅ SAME MODEL AS generate-questions
     });
 
     const aiResult = await model.generateContent({
@@ -156,13 +183,11 @@ ${resumeText}
       );
     }
 
-    // Extract evaluation + questions
     const json = parsed.evaluation;
     const parsedQuestions = Array.isArray(parsed.questions)
       ? parsed.questions
       : [];
 
-    // ------------ SAVE QUESTIONS ------------
     await db.insert(resumeQuestions).values({
       id: randomUUID(),
       candidateId: candidateId!,
@@ -170,7 +195,6 @@ ${resumeText}
       questions: parsedQuestions,
     });
 
-    // ------------ SAVE FEEDBACK ------------
     const scale = (n: number) => Math.round(Number(n) * 100);
 
     const feedbackId = randomUUID();
