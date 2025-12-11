@@ -230,29 +230,36 @@ Preserve logical reading order.
 
 async function generateAIContent(prompt: string) {
   try {
+    console.log("PROMPT SENT TO VERTEX:");
+    console.log(prompt);
+
     const model = await getAvailableModel();
+
+    console.log("Model loaded successfully.");
 
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 
+    console.log("RAW RESULT FROM VERTEX:");
+    console.log(JSON.stringify(result, null, 2));
+
     const rawText =
       result?.response?.candidates?.[0]?.content?.parts?.[0]?.text;
 
+    console.log("RAW TEXT:", rawText);
+
     if (!rawText) {
-      console.error(
-        "Vertex raw result (unexpected shape):",
-        JSON.stringify(result, null, 2)
-      );
-      throw new Error("No text returned from Vertex model");
+      throw new Error("Vertex returned empty response");
     }
 
     return JSON.parse(rawText);
-  } catch (err) {
+  } catch (err: any) {
     console.error("Vertex Generation Error:", err);
     throw err;
   }
 }
+
 
 // ====================================================================
 //                        NORMALIZER
