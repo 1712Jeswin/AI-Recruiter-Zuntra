@@ -50,10 +50,8 @@ function createVertexClient() {
 // =============================================================
 
 const PREFERRED_MODELS = [
-  "models/gemini-1.5-pro",
-  "models/gemini-1.5-pro-001",
-  "models/gemini-1.5-flash",
-  "models/gemini-1.5-flash-001",
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
 ];
 
 async function getAvailableModel() {
