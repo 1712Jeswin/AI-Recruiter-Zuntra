@@ -54,10 +54,6 @@ const PREFERRED_MODELS = [
   `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/models/gemini-2.0-flash`,
   "models/gemini-2.0-flash",
   "google/gemini-2.0-flash",
-  "models/gemini-1.5-pro",
-  "models/gemini-1.5-pro-001",
-  "models/gemini-1.5-flash",
-  "models/gemini-1.5-flash-001",
 ];
 
 async function getAvailableModel() {
