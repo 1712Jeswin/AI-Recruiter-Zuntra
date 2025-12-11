@@ -1,3 +1,7 @@
+
+export const runtime = "nodejs";
+
+
 import { NextResponse } from "next/server";
 import { VertexAI } from "@google-cloud/vertexai";
 import mammoth from "mammoth";
