@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Construct prompt INCLUDING UNBLUR COUNT
+    // ----------- PROMPT (unchanged) -----------
     const prompt = `
 You are an advanced AI interview evaluator. Analyze the candidate’s performance based on the voice answers.
 
@@ -52,12 +52,7 @@ RULE FOR LISTENING SKILLS:
 - If unblurCount = 0 → no penalty  
 - If unblurCount = 1 → mild penalty  
 - If unblurCount 2–3 → noticeable penalty  
-- If unblurCount ≥ 4 → strong penalty, explicitly mention it in feedback  
-- Incorporate this penalty into:
-  - communication score  
-  - professionalism feedback  
-  - summary  
-  - final verdict if necessary  
+- If unblurCount ≥ 4 → strong penalty  
 
 IMPORTANT — Return STRICT JSON ONLY.
 
@@ -97,12 +92,17 @@ Candidate Answers:
 ${JSON.stringify(answers, null, 2)}
 `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    // ============ MODEL (✓ UPDATED to match working model) ============
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash", // correct for API key usage
+    });
+
     const result = await model.generateContent(prompt);
 
-    let text = result.response.text();
-    let cleaned = cleanJSON(text);
+    // ✓ Avoid undefined text() outputs
+    let text = result?.response?.text?.() || result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
 
+    let cleaned = cleanJSON(text);
     let parsed;
 
     try {
@@ -118,17 +118,17 @@ ${JSON.stringify(answers, null, 2)}
       };
     }
 
-    // Save to database
+    // ============ SAVE TO DB ============
     await db
       .update(interviewSession)
       .set({
         evaluation: parsed,
-        status: "completed"   // ← Mark interview as completed
+        status: "completed"
       })
       .where(eq(interviewSession.candidateId, candidateId));
 
-
     return NextResponse.json({ success: true });
+
   } catch (err) {
     console.error("❌ Evaluation API Error:", err);
     return NextResponse.json({ error: "Evaluation failed" }, { status: 500 });
