@@ -50,10 +50,8 @@ function createVertexClient() {
 // =============================================================
 
 const PREFERRED_MODELS = [
-  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-2.0-flash`,
-  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/models/gemini-2.0-flash`,
-  "models/gemini-2.0-flash",
-  "google/gemini-2.0-flash",
+  "gemini-1.0-pro",
+  "gemini-1.0-pro-vision",
 ];
 
 async function getAvailableModel() {
