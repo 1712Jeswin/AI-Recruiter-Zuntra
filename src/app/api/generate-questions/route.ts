@@ -1,6 +1,4 @@
-
-export const runtime = "nodejs"
-
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { VertexAI } from "@google-cloud/vertexai";
@@ -9,54 +7,77 @@ import mammoth from "mammoth";
 /**
  * Required env:
  *  - GCP_PROJECT_ID
- *  - GOOGLE_APPLICATION_CREDENTIALS (absolute path to service account JSON)
+ *  - GOOGLE_SERVICE_ACCOUNT_BASE64 (Base64 of service account JSON)
  */
-
-// const pdf = require("pdf-parse");
 
 // ---------- ENV VALIDATION ----------
 if (!process.env.GCP_PROJECT_ID) {
   throw new Error("Missing GCP_PROJECT_ID env var");
 }
-if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  throw new Error("Missing GOOGLE_APPLICATION_CREDENTIALS env var");
+if (!process.env.GOOGLE_SERVICE_ACCOUNT_BASE64) {
+  throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_BASE64 env var");
+}
+
+// ---------- Decode Base64 Credentials ----------
+function loadCredentials() {
+  const base64 = process.env.GOOGLE_SERVICE_ACCOUNT_BASE64!;
+  const json = Buffer.from(base64, "base64").toString("utf8");
+  return JSON.parse(json);
 }
 
 // ---------- Vertex Client ----------
-const vertex = new VertexAI({
-  project: process.env.GCP_PROJECT_ID,
-  location: "us-central1",
-  googleAuthOptions: {
-    keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-  },
-});
+function createVertexClient() {
+  const credentials = loadCredentials();
 
-// Preferred model list
+  return new VertexAI({
+    project: process.env.GCP_PROJECT_ID!,
+    location: "us-central1",
+    googleAuthOptions: {
+      credentials,
+    },
+  });
+}
+
+const vertex = createVertexClient();
+
+// ---------- WORKING MODEL LIST ----------
 const PREFERRED_MODELS = [
-  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-2.0-flash`,
-  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/models/gemini-2.0-flash`,
-  "models/gemini-2.0-flash",
-  "google/gemini-2.0-flash",
+  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/models/gemini-1.5-flash-001`,
+  `projects/${process.env.GCP_PROJECT_ID}/locations/us-central1/models/gemini-1.5-pro-001`,
+  "models/gemini-1.5-flash-001",
+  "models/gemini-1.5-pro-001",
+  "gemini-1.5-flash-001",
+  "gemini-1.5-pro-001",
 ];
 
 // ---------- Resolve Model ----------
 async function getAvailableModel() {
   let lastErr: any = null;
+
   for (const modelId of PREFERRED_MODELS) {
     try {
+      console.log("Trying model:", modelId);
+
       const candidate = vertex.getGenerativeModel({
         model: modelId,
         generationConfig: { responseMimeType: "application/json" },
       });
+
+      console.log("Loaded model:", modelId);
       return candidate;
     } catch (err) {
+      console.log("Model failed:", modelId);
       lastErr = err;
     }
   }
+
   throw lastErr || new Error("No available Vertex model found");
 }
 
-// ---------- Main Handler ----------
+// ====================================================================
+//                        MAIN HANDLER
+// ====================================================================
+
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") || "";
@@ -87,7 +108,6 @@ export async function POST(request: Request) {
 
       const aiResponse = await generateAIContent(prompt);
       return NextResponse.json(normalizeToType2(aiResponse, interviewTypes));
-
     }
 
     // -------------------- CASE B: application/json --------------------
@@ -112,9 +132,8 @@ export async function POST(request: Request) {
         String(experienceLevel)
       );
 
-     const aiResponse = await generateAIContent(prompt);
-    return NextResponse.json(normalizeToType2(aiResponse));
-
+      const aiResponse = await generateAIContent(prompt);
+      return NextResponse.json(normalizeToType2(aiResponse));
     }
 
     return NextResponse.json(
@@ -221,7 +240,10 @@ async function generateAIContent(prompt: string) {
       result?.response?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!rawText) {
-      console.error("Vertex raw result (unexpected shape):", JSON.stringify(result, null, 2));
+      console.error(
+        "Vertex raw result (unexpected shape):",
+        JSON.stringify(result, null, 2)
+      );
       throw new Error("No text returned from Vertex model");
     }
 
@@ -236,39 +258,6 @@ async function generateAIContent(prompt: string) {
 //                        NORMALIZER
 // ====================================================================
 
-// function normalizeToType2(aiResponse: any) {
-//   const output: { questions: { question: string; type: string }[] } = {
-//     questions: [],
-//   };
-
-//   if (!aiResponse || !aiResponse.questions) return output;
-
-//   // Case: AI already returned an array [{question}]
-//   if (Array.isArray(aiResponse.questions)) {
-//    output.questions = aiResponse.questions
-//   .filter((q: any) => q?.question)
-//   .map((q: any) => ({
-//     question: String(q.question).trim(),
-//     type: String(q.type || "").trim(),
-//   }));
-
-//     return output;
-//   }
-
-//   // Fallback for object format
-//   Object.entries(aiResponse.questions).forEach(([_, list]) => {
-//     if (Array.isArray(list)) {
-//       list.forEach((q) => {
-//         if (q && typeof q === "string" && q.trim()) {
-//           output.questions.push({ question: q.trim(), type: "" });
-//         }
-//       });
-//     }
-//   });
-
-//   return output;
-// }
-
 function normalizeToType2(aiResponse: any, selectedTypes?: string[]) {
   const output: { questions: { question: string; type: string }[] } = {
     questions: [],
@@ -281,7 +270,6 @@ function normalizeToType2(aiResponse: any, selectedTypes?: string[]) {
       ? selectedTypes[0]
       : "";
 
-  // Case: AI already returned an array [{question}]
   if (Array.isArray(aiResponse.questions)) {
     output.questions = aiResponse.questions
       .filter((q: any) => q?.question)
@@ -293,7 +281,6 @@ function normalizeToType2(aiResponse: any, selectedTypes?: string[]) {
     return output;
   }
 
-  // Fallback for object format
   Object.entries(aiResponse.questions).forEach(([_, list]) => {
     if (Array.isArray(list)) {
       list.forEach((q) => {
@@ -310,7 +297,6 @@ function normalizeToType2(aiResponse: any, selectedTypes?: string[]) {
   return output;
 }
 
-
 // ====================================================================
 //                        PROMPT BUILDERS
 // ====================================================================
@@ -322,7 +308,6 @@ function buildGenerationPrompt(
   interviewType: string[],
   experienceLevel: string
 ): string {
-  // If recruiter selects nothing, default to all 5
   const selectedTypes =
     interviewType.length > 0
       ? interviewType
@@ -354,24 +339,15 @@ Each question must have:
 Rules:
 1. Generate questions ONLY from the selected types listed above.
 2. The 30 questions MUST be evenly distributed across the selected types.
-   Examples:
-   - If 1 type selected → all 30 belong to that type.
-   - If 2 types selected → ~15 per type.
-   - If 3 types selected → ~10 per type.
-   - If 4 types selected → ~7–8 per type.
-   - If 5 types selected → ~6 per type.
-3. Every question MUST be completely unique (no rephrased duplicates).
+3. Every question MUST be completely unique.
 4. All questions must match:
    - Job Role: ${jobPosition}
    - Experience Level: ${experienceLevel}
    - Job Description responsibility & context
-5. Apply the level-specific difficulty:
-   ${levelGuideline}
-6. Avoid generic or textbook-style questions.
-7. Output must be ONLY valid JSON. No markdown. No commentary.
+5. Apply: ${levelGuideline}
+6. Output ONLY valid JSON.
 
-The required output structure is:
-
+Format:
 {
   "questions": [
     { "question": "string", "type": "string" }
@@ -380,7 +356,6 @@ The required output structure is:
 
 --- Job Description ---
 ${jobDescription}
-------------------------
 `;
 }
 
@@ -394,25 +369,19 @@ function buildReviewPrompt(
 You are an expert recruitment assistant.
 Extract ONLY the interview questions from the document.
 
-Important:
-- DO NOT assign any category or type.
-- DO NOT attempt to classify questions.
-- Return ONLY the detected questions.
-- No commentary. No markdown.
+IMPORTANT:
+- DO NOT classify questions.
+- DO NOT add commentary.
+- Extract real interview-style questions only.
 
-Output format:
+Output:
 {
   "questions": [
     { "question": "string" }
   ]
 }
 
-Document content:
-----------------
+Document:
 ${fileText}
-----------------
-
-Extract as many valid interview questions as possible.
-If sentences resemble questions but are not valid interview questions, ignore them.
 `;
 }
