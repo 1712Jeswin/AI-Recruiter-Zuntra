@@ -1,85 +1,5 @@
-// import { redirect } from "next/navigation";
-// import InterviewClientWrapper from "./InterviewClientWrapper";
-
-// interface StartPageProps {
-//   params: {
-//     interview_id: string;
-//   };
-//   searchParams?: {
-//     candidateId?: string;
-//     [key: string]: string | undefined;
-//   };
-// }
-
-// export default async function StartPage({ params, searchParams }: StartPageProps) {
-//   const interviewId = params.interview_id;
-//   const candidateId = searchParams?.candidateId ?? "";
-
-
-//   // Always validate required data
-//   if (!interviewId) {
-//     redirect("/not-found");
-//   }
-
-//   // ---- FETCH BOOKING SECURELY (SERVER-SIDE) ----
-//   const res = await fetch(
-//     `${process.env.NEXT_PUBLIC_BASE_URL}/api/bookings/get-time?interview_id=${interviewId}`,
-//     { cache: "no-store" }
-//   );
-
-//   if (!res.ok) {
-//     redirect("/not-found");
-//   }
-
-//   const booking = await res.json();
-
-//   if (!booking?.start) {
-//     redirect("/not-found");
-//   }
-
-//   // ---- TIME VALIDATION ----
-//   const now = Date.now();
-//   const startTime = new Date(booking.start).getTime();
-
-//   if (isNaN(startTime)) {
-//     redirect(`/error?msg=Invalid start time`);
-//   }
-
-//   // ⛔ BLOCK IF INTERVIEW HAS NOT STARTED
-//   if (now < startTime) {
-//     redirect(`/scheduled/${interviewId}?error=not-started`);
-//   }
-
-//   // ---- CHECK SESSION STATUS ----
-//   const statusRes = await fetch(
-//     `${process.env.NEXT_PUBLIC_BASE_URL}/api/interview/${interviewId}/session-status?candidateId=${candidateId}`,
-//     { cache: "no-store" }
-//   );
-
-//   const status = statusRes.ok ? await statusRes.json() : null;
-
-//   if (status?.status === "completed") {
-//     redirect(`/interview/${interviewId}/done`);
-//   }
-
-//   // ---- SAFE: INTERVIEW ALLOWED ----
-//   return (
-//     <InterviewClientWrapper
-//       interviewId={interviewId}
-//       candidateId={candidateId}
-//     />
-//   );
-// }
-
-
 import { redirect } from "next/navigation";
 import InterviewClientWrapper from "./InterviewClientWrapper";
-// interface StartPageProps {
-//   params: { interview_id: string };
-//   searchParams?: {
-//     candidateId?: string;
-//   };
-// }
 
 export default async function StartPage({
   params,
@@ -91,18 +11,29 @@ export default async function StartPage({
   const { interview_id } = await params;
   const { candidateId = "" } = await searchParams;
 
+  if (!candidateId) {
+    redirect(`/interview/${interview_id}?error=missing-candidate`);
+  }
 
   if (!interview_id) redirect("/not-found");
 
+  // -----------------------------
+  // ✅ USE ABSOLUTE URL FOR SERVER FETCH
+  // -----------------------------
+  const baseUrl = process.env.NEXT_PUBLIC_HOST_URL;
+  if (!baseUrl) {
+    throw new Error("❌ NEXT_PUBLIC_HOST_URL is missing in .env");
+  }
+
   // ---- SAFE FETCH BOOKING ----
-  const res = await fetch(
-    `/api/bookings/get-time?interview_id=${interview_id}`,
+  const bookingRes = await fetch(
+    `${baseUrl}/api/bookings/get-time?interview_id=${interview_id}`,
     { cache: "no-store" }
   );
 
-  if (!res.ok) redirect("/not-found");
+  if (!bookingRes.ok) redirect("/not-found");
 
-  const booking = await res.json();
+  const booking = await bookingRes.json();
 
   if (!booking?.start) redirect("/not-found");
 
@@ -117,7 +48,7 @@ export default async function StartPage({
 
   // ---- FETCH SESSION STATUS ----
   const statusRes = await fetch(
-    `/api/interview/${interview_id}/session-status?candidateId=${candidateId}`,
+    `${baseUrl}/api/interview/${interview_id}/session-status?candidateId=${candidateId}`,
     { cache: "no-store" }
   );
 
@@ -128,6 +59,9 @@ export default async function StartPage({
   }
 
   return (
-    <InterviewClientWrapper interviewId={interview_id} candidateId={candidateId} />
+    <InterviewClientWrapper
+      interviewId={interview_id}
+      candidateId={candidateId}
+    />
   );
 }
