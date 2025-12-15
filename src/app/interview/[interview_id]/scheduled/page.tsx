@@ -106,12 +106,27 @@ export default function ScheduledPage() {
   const searchParams = useSearchParams(); // ✅ added
 
   const interview_id = params?.interview_id as string;
-  const candidateId = searchParams.get("candidateId"); // ✅ fixed
+  const [candidateId, setCandidateId] = useState<string | null>(null);
+
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+
+  useEffect(() => {
+    const storedCandidateId = localStorage.getItem("candidateId");
+
+    if (!storedCandidateId) {
+      console.error("candidateId missing in localStorage");
+      router.replace("/not-found"); // or error page
+      return;
+    }
+
+    setCandidateId(storedCandidateId);
+  }, [router]);
+
 
   // --------------------------------------
   // FETCH BOOKING
@@ -200,10 +215,10 @@ export default function ScheduledPage() {
 
   const endDate = booking.end
     ? new Date(
-        typeof booking.end === "string"
-          ? booking.end
-          : booking.end.toISOString()
-      )
+      typeof booking.end === "string"
+        ? booking.end
+        : booking.end.toISOString()
+    )
     : null;
 
   const dateStr = startDate.toLocaleDateString("en-US", {
@@ -215,18 +230,18 @@ export default function ScheduledPage() {
 
   const timeStr = endDate
     ? `${startDate.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-      })} - ${endDate.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        timeZoneName: "short",
-      })}`
+      hour: "numeric",
+      minute: "2-digit",
+    })} - ${endDate.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    })}`
     : startDate.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        timeZoneName: "short",
-      });
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
 
   const handleCopy = () => {
     if (booking.meetingLink) {
@@ -278,13 +293,13 @@ export default function ScheduledPage() {
                 {timeLeft === null
                   ? "---"
                   : timeLeft <= 0
-                  ? "Starting now"
-                  : formatCountdown(timeLeft)}
+                    ? "Starting now"
+                    : formatCountdown(timeLeft)}
               </p>
             </div>
 
             {/* Start Button */}
-            <button
+            {/* <button
               disabled={timeLeft === null || timeLeft > 0}
               onClick={() =>
                 timeLeft !== null &&
@@ -308,6 +323,30 @@ export default function ScheduledPage() {
                 : "Start Interview"}
               <ArrowRight className="w-5 h-5" />
             </button>
+           */}
+
+            <button
+              disabled={!candidateId}
+              onClick={() => {
+                if (!candidateId) return;
+
+                router.push(
+                  `/interview/${interview_id}/start?candidateId=${encodeURIComponent(candidateId)}`
+                );
+              }}
+              className={`w-full text-lg font-semibold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 transition-all
+    ${candidateId
+                  ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:-translate-y-0.5"
+                  : "bg-slate-300 text-slate-500 cursor-not-allowed"
+                }
+  `}
+            >
+              Go to Interview Dashboard
+              <ArrowRight className="w-5 h-5" />
+            </button>
+
+
+
           </div>
 
           {/* Footer */}

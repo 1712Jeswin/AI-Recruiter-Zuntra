@@ -137,7 +137,7 @@ CREATE TABLE "user" (
 	"email_verified" boolean NOT NULL,
 	"image" text,
 	"role" "user_role" DEFAULT 'client' NOT NULL,
-	"credits" integer DEFAULT 3 NOT NULL,
+	"credits" integer DEFAULT 100 NOT NULL,
 	"created_at" timestamp NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	CONSTRAINT "user_email_unique" UNIQUE("email")

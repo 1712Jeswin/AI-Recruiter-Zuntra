@@ -171,6 +171,42 @@ const FinalEvaluationLoader = () => {
   );
 };
 
+
+const waitForSTTServer = async (
+  retries = 15,
+  delay = 2000
+): Promise<boolean> => {
+  const url = process.env.NEXT_PUBLIC_STT_HEALTH_URL;
+
+  if (!url) {
+    console.warn("⚠️ No STT health URL set");
+    return true;
+  }
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      console.log(`⏳ STT health check ${i + 1}/${retries}`);
+      const res = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      console.log("✅ Health response:", res.status);
+
+      if (res.ok) return true;
+    } catch (err) {
+      console.warn("❌ Health fetch failed (retrying)");
+    }
+
+    await new Promise((r) => setTimeout(r, delay));
+  }
+
+  console.warn("⚠️ STT warm-up timed out");
+  return false;
+};
+
+
+
 export default function InterviewPage({
   interviewId,
   candidateId,
@@ -240,7 +276,7 @@ export default function InterviewPage({
   useEffect(() => {
     const unlock = () => {
       const a = new Audio();
-      a.play().catch(() => {});
+      a.play().catch(() => { });
       window.removeEventListener("click", unlock);
     };
     window.addEventListener("click", unlock);
@@ -273,7 +309,7 @@ export default function InterviewPage({
     if (audioRef.current) {
       try {
         audioRef.current.pause();
-      } catch {}
+      } catch { }
       audioRef.current.src = "";
     }
     audioRef.current = null;
@@ -285,7 +321,7 @@ export default function InterviewPage({
       if (stoppingRef.current) return resolve();
       try {
         setIsListening(false);
-      } catch {}
+      } catch { }
 
       try {
         stopAudio();
@@ -314,7 +350,7 @@ export default function InterviewPage({
           if (stoppingRef.current && audioRef.current) {
             try {
               audioRef.current.pause();
-            } catch {}
+            } catch { }
             clearInterval(killer);
             resolve();
           }
@@ -352,21 +388,109 @@ export default function InterviewPage({
   };
 
   /* ------------------ STT SYSTEM ------------------ */
+  // const startSTT = async () => {
+  //   try {
+  //     stopSTT();
+  //     stopAudio();
+
+  //     // CONNECT TO RENDER STT SERVER
+  //     const socket = new WebSocket(process.env.NEXT_PUBLIC_STT_URL!);
+  //     wsRef.current = socket;
+
+  //     socket.onopen = async () => {
+  //       console.log("🎧 Connected to STT server");
+
+  //       const stream = await navigator.mediaDevices.getUserMedia({
+  //         audio: true,
+  //       });
+  //       streamRef.current = stream;
+
+  //       const recorder = new MediaRecorder(stream, {
+  //         mimeType: "audio/webm; codecs=opus",
+  //       });
+  //       recorderRef.current = recorder;
+
+  //       recorder.ondataavailable = (e) => {
+  //         if (e.data.size > 0 && socket.readyState === WebSocket.OPEN) {
+  //           socket.send(e.data);
+  //         }
+  //       };
+
+  //       recorder.start(150);
+  //       setIsListening(true);
+  //     };
+
+  //     socket.onmessage = (event) => {
+  //       try {
+  //         const msg = JSON.parse(event.data);
+  //         if (!msg.text) return;
+
+  //         const incoming = msg.text.trim();
+  //         lastTranscriptRef.current = incoming;
+  //         setAnswer((prev) => (prev + " " + incoming).trim());
+
+  //         resetSilenceTimer();
+  //       } catch {}
+  //     };
+
+  //     socket.onerror = (err) => {
+  //       console.error("STT WebSocket Error:", err);
+  //     };
+
+  //     socket.onclose = () => {
+  //       console.log("🔌 STT disconnected");
+  //       setIsListening(false);
+  //     };
+  //   } catch (err) {
+  //     console.error("❌ startSTT ERROR:", err);
+  //   }
+  // };
+
   const startSTT = async () => {
     try {
       stopSTT();
       stopAudio();
 
-      // CONNECT TO RENDER STT SERVER
+      setIsListening(false);
+
+      /* 🟡 1. WAIT FOR RENDER TO WAKE UP */
+      const waitForServer = async (
+        retries = 8,
+        delay = 2000
+      ): Promise<boolean> => {
+        const healthUrl = process.env.NEXT_PUBLIC_STT_HEALTH_URL;
+        if (!healthUrl) return true; // allow local dev
+
+        for (let i = 0; i < retries; i++) {
+          try {
+            const res = await fetch(healthUrl, { cache: "no-store" });
+            if (res.ok) return true;
+          } catch { }
+          await new Promise((r) => setTimeout(r, delay));
+        }
+        return false;
+      };
+
+      const ready = await waitForServer();
+      // if (!ready) {
+      //   console.error("❌ STT server not ready");
+      //   setSilenceWarning(true);
+      //   return;
+      // }
+
+      if (!ready) {
+        console.warn("⚠️ STT warm-up failed, attempting WS anyway");
+      }
+
+
+      /* 🟢 2. CONNECT TO STT SERVER */
       const socket = new WebSocket(process.env.NEXT_PUBLIC_STT_URL!);
       wsRef.current = socket;
 
       socket.onopen = async () => {
         console.log("🎧 Connected to STT server");
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
 
         const recorder = new MediaRecorder(stream, {
@@ -382,8 +506,10 @@ export default function InterviewPage({
 
         recorder.start(150);
         setIsListening(true);
+        resetSilenceTimer();
       };
 
+      /* 🧠 3. HANDLE TRANSCRIPTS */
       socket.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
@@ -394,11 +520,13 @@ export default function InterviewPage({
           setAnswer((prev) => (prev + " " + incoming).trim());
 
           resetSilenceTimer();
-        } catch {}
+        } catch { }
       };
 
-      socket.onerror = (err) => {
-        console.error("STT WebSocket Error:", err);
+      /* ⚠️ 4. SAFE ERROR HANDLING */
+      socket.onerror = () => {
+        console.warn("⚠️ STT WebSocket error");
+        setIsListening(false);
       };
 
       socket.onclose = () => {
@@ -407,6 +535,7 @@ export default function InterviewPage({
       };
     } catch (err) {
       console.error("❌ startSTT ERROR:", err);
+      setIsListening(false);
     }
   };
 
@@ -421,13 +550,13 @@ export default function InterviewPage({
   const stopSTT = () => {
     try {
       recorderRef.current?.stop();
-    } catch {}
+    } catch { }
     try {
       streamRef.current?.getTracks().forEach((t) => t.stop());
-    } catch {}
+    } catch { }
     try {
       wsRef.current?.close();
-    } catch {}
+    } catch { }
 
     recorderRef.current = null;
     streamRef.current = null;
@@ -869,9 +998,8 @@ export default function InterviewPage({
             {/* Question */}
             <div className="mb-4">
               <h2
-                className={`text-lg font-semibold text-slate-900 leading-relaxed transition-all duration-300 ${
-                  blurQuestion ? "blur-sm select-none pointer-events-none" : ""
-                }`}
+                className={`text-lg font-semibold text-slate-900 leading-relaxed transition-all duration-300 ${blurQuestion ? "blur-sm select-none pointer-events-none" : ""
+                  }`}
               >
                 {currentQuestion.question}
               </h2>
@@ -906,11 +1034,10 @@ export default function InterviewPage({
                   </div>
 
                   <div
-                    className={`text-xs font-medium transition-opacity duration-200 ${
-                      isListening
+                    className={`text-xs font-medium transition-opacity duration-200 ${isListening
                         ? "text-blue-500 animate-pulse opacity-100"
                         : "text-slate-400 opacity-60"
-                    }`}
+                      }`}
                   >
                     {isListening ? "AI Listening..." : "AI Speaking..."}
                   </div>
@@ -933,11 +1060,10 @@ export default function InterviewPage({
               {/* Waveform */}
               <div
                 className={`w-28 flex-shrink-0 flex items-center justify-center bg-gradient-to-b 
-                                    from-white to-slate-50 border border-slate-100 rounded-xl p-3 transition-all duration-300 ${
-                                      isListening
-                                        ? "animate-pulse opacity-100"
-                                        : "opacity-30"
-                                    }`}
+                                    from-white to-slate-50 border border-slate-100 rounded-xl p-3 transition-all duration-300 ${isListening
+                    ? "animate-pulse opacity-100"
+                    : "opacity-30"
+                  }`}
               >
                 <svg width="48" height="28" viewBox="0 0 48 28" fill="none">
                   <rect
